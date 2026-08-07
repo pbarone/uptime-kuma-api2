@@ -9,7 +9,8 @@ import warnings
 from collections import namedtuple
 from contextlib import contextmanager
 from copy import deepcopy
-from typing import Any
+from os import PathLike
+from typing import Any, Union
 
 import requests
 import socketio
@@ -620,7 +621,7 @@ class UptimeKumaApi(object):
             url: str,
             timeout: float = 10,
             headers: dict = None,
-            ssl_verify: bool = True,
+            ssl_verify: Union[bool, str, PathLike] = True,
             wait_events: float = 0.2,
             logger=None,
     ) -> None:
@@ -636,6 +637,11 @@ class UptimeKumaApi(object):
         self.ssl_verify = ssl_verify
 
         sio_kwargs = {"ssl_verify": ssl_verify}
+        if isinstance(ssl_verify, (str, PathLike)):
+            _http = requests.Session()
+            _http.verify = str(ssl_verify)
+            sio_kwargs["http_session"] = _http
+
         if logger is not None:
             sio_kwargs["logger"] = logger
         self.sio = socketio.Client(**sio_kwargs)
