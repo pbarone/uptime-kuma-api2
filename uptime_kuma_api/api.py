@@ -65,10 +65,19 @@ _V2_ONLY_MONITOR_TYPES = {
     MonitorType.RABBITMQ: "2.0",
     MonitorType.SNMP: "2.0",
     MonitorType.SMTP: "2.0",
+    # louislam/uptime-kuma 2.0.0-beta.4; absent at 1.23.17 and 2.0.0-beta.3.
+    MonitorType.MANUAL: "2.0",
     # louislam/uptime-kuma#6488, merge 6a700cb, milestone 2.1.0. Absent from
     # EditMonitor.vue at 2.0.0, 2.0.2 and 2.1.0-beta.0; first present at
     # 2.1.0-beta.1.
     MonitorType.SYSTEM_SERVICE: "2.1",
+    # louislam/uptime-kuma 2.1.0-beta.0; absent at 2.0.2.
+    MonitorType.WEBSOCKET_UPGRADE: "2.1",
+    # louislam/uptime-kuma between 2.1.0-beta.3 and 2.1.0 final; absent at
+    # 2.1.0-beta.3.
+    MonitorType.GLOBALPING: "2.1",
+    # louislam/uptime-kuma 2.1.0-beta.2; absent at 2.1.0-beta.1.
+    MonitorType.SIP_OPTIONS: "2.1",
 }
 
 
