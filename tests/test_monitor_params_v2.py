@@ -2569,6 +2569,10 @@ V2_ONLY_TYPE_CASES = {
     ),
     MonitorType.SMTP: dict(hostname="127.0.0.1", port=25),
     MonitorType.SYSTEM_SERVICE: dict(system_service_name="cron"),
+    MonitorType.MANUAL: dict(),
+    MonitorType.WEBSOCKET_UPGRADE: dict(url="ws://127.0.0.1:8080"),
+    MonitorType.GLOBALPING: dict(hostname="example.com"),
+    MonitorType.SIP_OPTIONS: dict(hostname="127.0.0.1", port=5060),
 }
 
 # Monitor types that exist on both majors. These must be entirely unaffected by
@@ -2821,13 +2825,13 @@ class TestV2OnlyMonitorTypesPreservation(unittest.TestCase):
         return UptimeKumaApi._build_monitor_data.__get__(self._api_for(version))
 
     def test_v2_only_types_accepted_on_v2_with_companion_fields(self):
-        """On v2 all four types build a payload carrying their companion fields.
+        """On v2 all eight types build a payload carrying their companion fields.
 
         The gate must not narrow v2 in any way, so every companion argument is
         asserted present in the built payload rather than merely "no exception
         was raised".
 
-        **Validates: Requirements 3.1**
+        **Validates: Requirements 3.1, issue #29**
         """
         build = self._build_for("2.4.0")
         # ``rabbitmqNodes`` is JSON-serialised on the way into the payload, so
@@ -2844,6 +2848,10 @@ class TestV2OnlyMonitorTypesPreservation(unittest.TestCase):
             },
             MonitorType.SMTP: {"smtpSecurity": "starttls"},
             MonitorType.SYSTEM_SERVICE: {"system_service_name": "cron"},
+            MonitorType.MANUAL: {},
+            MonitorType.WEBSOCKET_UPGRADE: {"url": "ws://127.0.0.1:8080"},
+            MonitorType.GLOBALPING: {"hostname": "example.com"},
+            MonitorType.SIP_OPTIONS: {"hostname": "127.0.0.1"},
         }
         for type_, kwargs in V2_ONLY_TYPE_CASES.items():
             with self.subTest(type=type_):
@@ -3701,6 +3709,7 @@ TYPES_FLOORED_AT_2_0 = [
     MonitorType.RABBITMQ,
     MonitorType.SNMP,
     MonitorType.SMTP,
+    MonitorType.MANUAL,
 ]
 
 
@@ -3821,12 +3830,12 @@ class TestPerTypeVersionFloors(unittest.TestCase):
     # --- preservation: the other three keep the 2.0 floor ---
 
     def test_the_other_three_still_floored_at_2_0(self):
-        """`rabbitmq`, `snmp` and `smtp` are 2.0.0 types and must not move.
+        """`rabbitmq`, `snmp`, `smtp` and `manual` are 2.0.0 types and must not move.
 
         Rejected below 2.0 and accepted at 2.0 exactly, which is the boundary the
         2.3.1 fix established and this change must not disturb.
 
-        **Validates: issue #28 preservation**
+        **Validates: issue #28, issue #29**
         """
         for type_ in TYPES_FLOORED_AT_2_0:
             with self.subTest(type=type_, version="1.23.2"):
@@ -3847,13 +3856,45 @@ class TestPerTypeVersionFloors(unittest.TestCase):
                     self._build_type("1.23.2", type_)
                 self.assertIn("2.0 or newer", str(ctx.exception))
 
+    # --- the three new 2.1-floor types (issue #29) ---
+
+    TYPES_FLOORED_AT_2_1 = [
+        MonitorType.SYSTEM_SERVICE,
+        MonitorType.WEBSOCKET_UPGRADE,
+        MonitorType.GLOBALPING,
+        MonitorType.SIP_OPTIONS,
+    ]
+
+    def test_2_1_floor_types_rejected_on_2_0_x(self):
+        """All 2.1-floor types must be rejected on any 2.0.x server.
+
+        **Validates: issue #29**
+        """
+        for type_ in self.TYPES_FLOORED_AT_2_1:
+            for version in ("2.0", "2.0.0", "2.0.1", "2.0.2"):
+                with self.subTest(type=type_.value, version=version):
+                    with self.assertRaises(UptimeKumaException) as ctx:
+                        self._build_type(version, type_)
+                    self.assertIn("2.1", str(ctx.exception))
+
+    def test_2_1_floor_types_accepted_from_2_1_onward(self):
+        """All 2.1-floor types build normally at and above their floor.
+
+        **Validates: issue #29**
+        """
+        for type_ in self.TYPES_FLOORED_AT_2_1:
+            for version in ("2.1", "2.1.0", "2.1.0-beta.0", "2.2.0", "2.5.0"):
+                with self.subTest(type=type_.value, version=version):
+                    result = self._build_type(version, type_)
+                    self.assertEqual(result["type"], type_)
+
     def test_every_v2_only_type_has_a_floor(self):
-        """The mapping covers exactly the four types, each with a floor.
+        """The mapping covers exactly the eight types, each with a floor.
 
         A type added to the mapping without a floor, or a floor added without a
         type, fails here rather than at a caller.
 
-        **Validates: issue #28**
+        **Validates: issue #28, issue #29**
         """
         self.assertEqual(
             dict(_V2_ONLY_MONITOR_TYPES),
@@ -3861,7 +3902,11 @@ class TestPerTypeVersionFloors(unittest.TestCase):
                 MonitorType.RABBITMQ: "2.0",
                 MonitorType.SNMP: "2.0",
                 MonitorType.SMTP: "2.0",
+                MonitorType.MANUAL: "2.0",
                 MonitorType.SYSTEM_SERVICE: SYSTEM_SERVICE_FLOOR,
+                MonitorType.WEBSOCKET_UPGRADE: "2.1",
+                MonitorType.GLOBALPING: "2.1",
+                MonitorType.SIP_OPTIONS: "2.1",
             },
         )
 

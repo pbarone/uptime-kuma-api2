@@ -79,5 +79,17 @@ class MonitorType(str, Enum):
     SMTP = "smtp"
     """SMTP"""
 
+    MANUAL = "manual"
+    """Manual"""
+
     SYSTEM_SERVICE = "system-service"
     """System Service"""
+
+    WEBSOCKET_UPGRADE = "websocket-upgrade"
+    """Websocket Upgrade"""
+
+    GLOBALPING = "globalping"
+    """Globalping"""
+
+    SIP_OPTIONS = "sip-options"
+    """SIP Options Ping"""
