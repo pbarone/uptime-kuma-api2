@@ -36,6 +36,10 @@ license. **Import package:** `uptime_kuma_api` (never rename it). **PyPI name:**
 - Conventional Commits for messages (`fix:`, `feat:`, `docs:`, ...); `!` for
   breaking changes.
 - Branch → PR → CI → merge; never commit to `main` directly; never force-push.
+  Create the branch before your first edit — protection is server-side, so a
+  local commit on `main` succeeds and undoing it needs `reset --hard`.
+  Commit at task/phase boundaries, not once at the end — squash is not used, so
+  the per-commit bodies are the reasoning trail and are unrecoverable after the push.
 - Update `CHANGELOG.md` for user-facing changes.
 
 ## Commands

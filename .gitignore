@@ -1,16 +1,49 @@
+# --- Editors / OS -----------------------------------------------------
 .idea
-venv
-.envrc
+.vscode/
+.DS_Store
+
+# --- Python bytecode / build ------------------------------------------
 __pycache__
-*.egg-info
+*.py[cod]
 build
 dist
+*.egg-info
+.eggs/
+
+# --- Virtualenvs ------------------------------------------------------
+# Both names listed explicitly. .venv currently self-ignores only because
+# `python -m venv` wrote .venv/.gitignore containing `*` -- incidental
+# protection that disappears if the env is rebuilt by a tool that doesn't.
+venv
+.venv/
+.envrc
+
+# --- Test / coverage caches -------------------------------------------
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+
+# --- Docs -------------------------------------------------------------
 docs/_build
+
+# --- Secrets ----------------------------------------------------------
+# The root .env holds the disposable-container host and SSH user; tests/.env
+# holds live-instance credentials. The .* variants are ignored too because a
+# host address has already been scrubbed from this repo's history once, and
+# .env.local / .env.bak is how it comes back.
 .env
+.env.*
 tests/.env
+tests/.env.*
+!tests/.env.example
 tests/.live_test_ids.json
 # Config snapshots from live_test_backup.py — contain plaintext secrets
 tests/.backups/
+
+# --- Local-only working files -----------------------------------------
 # Internal working note; contains candid triage assessments not meant for the public repo
 UPSTREAM_TRIAGE.md
 # Transient spec tooling state (chat session IDs, epoch timestamps); traceability lives in tasks.md
