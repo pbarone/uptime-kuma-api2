@@ -1,5 +1,26 @@
 ## Changelog
-### Unreleased
+### Release 2.5.0
+A feature release, and non-breaking on every final release in the supported
+1.21.3 through Uptime Kuma 2.5.0 range: a call that succeeds against 2.4.0 still
+succeeds and still returns the same value. (Our 2.5.0 and Uptime Kuma's 2.5.0 are
+unrelated numbers that happen to coincide; every version below refers to the
+Uptime Kuma server unless it says otherwise.)
+One thread runs through all three entries: **a v2-only surface's floor is the
+release that introduced it, never the major version.** The library had been
+treating `2.0` as the boundary for things Uptime Kuma actually shipped in 2.1.0,
+and it was wrong in three separate places -- one monitor type, two status-page
+fields, and the three status-page analytics keys. All three are corrected here,
+each floor established from Uptime Kuma's own source and tags rather than
+inferred, and the third was additionally observed on a running 2.0.2 server.
+The shape of the mistake is worth recording because it is not obvious from
+inside a `>= 2.0` check: a 2.0.x server is a 2.x server, so a gate that reads
+"2.x or newer" looks correct and silently sends fields no 2.0.x release
+implements -- or, in the analytics case, withholds the one it does. Nothing
+errors. The monitor sat `PENDING` forever, or the status page saved successfully
+having dropped the caller's value.
+The feature is the withhold-and-warn rule reaching a second surface. Status-page
+fields a server cannot accept are now announced instead of vanishing, the same
+way monitor fields have been since 2.4.0.
 #### Features
 - **Status-page v2-only fields are now withheld and warned.** The
   withhold-and-warn rule established in 2.4.0 for monitor fields now extends to
