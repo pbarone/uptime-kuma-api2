@@ -67,6 +67,26 @@
 
     A second script on a different port, so it can run alongside the first.
 
+.EXAMPLE
+    pwsh -File scripts/run_disposable_kuma.ps1 `
+        -Script tests/live_test_status_page_analytics_v2_0.py `
+        -Image louislam/uptime-kuma:2.0.2 -Port 3025 `
+        -DockerEnv UPTIME_KUMA_DB_TYPE=sqlite
+
+    A 2.x container. -Image has always accepted any tag; the two things a 2.x
+    run needs beyond that are not obvious and cost an hour to rediscover:
+
+    1. -DockerEnv UPTIME_KUMA_DB_TYPE=sqlite is REQUIRED. On first boot 2.x
+       serves a "setup-database" screen and does not mount socket.io until a
+       database type is chosen, so the client hangs on the handshake while
+       /socket.io/ falls through to the SPA and answers 200 with HTML.
+       Observed on 2.0.2: /api/entry-page returns {"type":"setup-database"}.
+
+    2. The readiness check below waits for HTTP 200 on /, which 2.x answers
+       before socket.io accepts. The script under test should retry its initial
+       connection for a while rather than assuming PASS ready means connectable
+       -- see connect_with_retry in live_test_status_page_analytics_v2_0.py.
+
 .NOTES
     Requires the root .env to define DOCKER-HOST and DOCKER-USER, key-based SSH
     to that host, and Docker on it. This is maintainer tooling: scripts/ ships in
@@ -91,6 +111,20 @@ param(
 
     [string]$Image = 'louislam/uptime-kuma:1.23.2',
     [int]$Port = 3023,
+
+    # Extra environment for the container, as KEY=VALUE strings.
+    #
+    # Needed for any 2.x image: on first boot 2.x serves a "setup-database"
+    # screen and does NOT mount socket.io until a database type is chosen, so a
+    # client hangs on the handshake forever while HTTP happily answers 200.
+    # UPTIME_KUMA_DB_TYPE=sqlite skips that screen (server/setup-database.js
+    # reads it to override db-config.json). Without this parameter the runner
+    # could only ever drive 1.x containers.
+    #
+    # Only KEY names are echoed, never values -- but this is not a secret
+    # channel: it lands in the remote shell command line and is visible in
+    # `docker inspect`. Do not pass credentials.
+    [string[]]$DockerEnv = @(),
     [string]$Name,
     [string]$Username = 'admin',
     [string]$Password,
@@ -188,12 +222,30 @@ Write-Output "  image     $Image"
 Write-Output "  container $Name"
 Write-Output "  address   http://<docker-host>:$Port/"
 Write-Output "  script    $Script"
+if ($DockerEnv.Count -gt 0) {
+    # Names only. A value could be anything and this line is not sanitized for
+    # arbitrary secrets, only for the host and user.
+    $names = ($DockerEnv | ForEach-Object { ($_ -split '=', 2)[0] }) -join ', '
+    Write-Output "  env       $names"
+}
 Write-Output ""
 
 Write-Output "== starting =="
 # rm -f first so a container left behind by an interrupted earlier run does not
 # make this one fail on the name.
-Write-Clean (Invoke-Remote "docker rm -f $Name 2>/dev/null; docker run -d --name $Name -p ${Port}:3001 $Image")
+$envArgs = ''
+foreach ($pair in $DockerEnv) {
+    if ($pair -notmatch '=') {
+        Write-Output "FAIL: -DockerEnv entries must be KEY=VALUE; got '$pair'"
+        exit 1
+    }
+    # Single-quoted for the remote shell so a value containing spaces or shell
+    # metacharacters is passed through literally rather than re-parsed there.
+    $key, $value = $pair -split '=', 2
+    $escaped = $value -replace "'", "'\''"
+    $envArgs += " -e '$key=$escaped'"
+}
+Write-Clean (Invoke-Remote "docker rm -f $Name 2>/dev/null; docker run -d --name $Name -p ${Port}:3001$envArgs $Image")
 if ($LASTEXITCODE -ne 0) {
     Write-Output "FAIL: could not start the container (ssh/docker exit $LASTEXITCODE)"
     exit 1

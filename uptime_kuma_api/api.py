@@ -1691,10 +1691,20 @@ class UptimeKumaApi(object):
                 "showCertificateExpiry": showCertificateExpiry,
             })
 
-        if self._parsed_version() >= parse_version("2.0"):
-            # v2: use new analytics fields, omit googleAnalyticsId.
+        # The analytics boundary is 2.1, not 2.0. The three analytics keys and
+        # the two fields below them all first ship in 2.1.0; a 2.0.x server still
+        # reads googleAnalyticsId. Gating them at 2.0 sent four keys 2.0.x has no
+        # columns for and dropped the one it does read, so a caller's
+        # googleAnalyticsId was silently lost on any save against 2.0.0-2.0.2.
+        # Provenance is upstream source at tags, not inference:
+        # server/socket-handlers/status-page-socket-handler.js and
+        # server/model/status_page.js carry google_analytics_tag_id at 2.0.0 and
+        # 2.0.2 with no analytics_* columns; at 2.1.0 the analytics_* columns
+        # exist and google_analytics_tag_id is gone. See issue #41.
+        if self._parsed_version() >= parse_version("2.1"):
+            # 2.1+: use the new analytics fields, omit googleAnalyticsId.
             #
-            # These are sent unconditionally, including when None. The v2 server
+            # These are sent unconditionally, including when None. The server
             # validates analyticsType and rejects the whole save with "Invalid
             # analytics type" if the key is absent. Verified against 2.4.0:
             # null is accepted, as are "google"/"plausible"/"umami", while an
@@ -1704,15 +1714,22 @@ class UptimeKumaApi(object):
             config["analyticsType"] = analyticsType
             config["analyticsId"] = analyticsId
             config["analyticsScriptUrl"] = analyticsScriptUrl
-            # v2: omit password entirely (silently ignored)
-            # v2: new fields
+            # 2.1+: showOnlyLastHeartbeat and rssTitle. Their floor is 2.1 in
+            # _V2_ONLY_STATUS_PAGE_FIELDS, so the guard here agrees with the
+            # registry rather than being one minor version looser than it.
             if showOnlyLastHeartbeat is not None:
                 config["showOnlyLastHeartbeat"] = showOnlyLastHeartbeat
             if rssTitle is not None:
                 config["rssTitle"] = rssTitle
         else:
-            # v1: include googleAnalyticsId and password
+            # Below 2.1, including every 2.0.x: the server reads
+            # googleAnalyticsId and has no analytics_* columns.
             config["googleAnalyticsId"] = googleAnalyticsId
+
+        # password is separate, and its boundary really is 2.0: the v2 server
+        # ignores it. Left exactly as it was -- the analytics boundary being
+        # wrong says nothing about this one.
+        if self._parsed_version() < parse_version("2.0"):
             if password is not None:
                 config["password"] = password
 

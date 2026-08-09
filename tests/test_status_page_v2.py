@@ -661,3 +661,145 @@ class TestSettingsNoV2Surface(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class TestStatusPageAnalyticsBoundaryIs2_1(unittest.TestCase):
+    """Issue #41: the status-page analytics boundary is 2.1, not 2.0.
+
+    The three analytics keys and the two fields alongside them first ship in
+    Uptime Kuma 2.1.0, while a 2.0.x server still reads ``googleAnalyticsId``.
+    Gating them at ``2.0`` sent four keys 2.0.x has no columns for and withheld
+    the one it does read, so a caller's ``googleAnalyticsId`` was silently
+    dropped on every save against 2.0.0-2.0.2.
+
+    Provenance is upstream source at tags rather than inference:
+    ``server/socket-handlers/status-page-socket-handler.js`` and
+    ``server/model/status_page.js`` carry ``google_analytics_tag_id`` at 2.0.0
+    and 2.0.2 with no ``analytics_*`` columns; at 2.1.0 the ``analytics_*``
+    columns exist and ``google_analytics_tag_id`` is gone.
+
+    2.0.2 is the version that discriminates: at 1.23.2 and 2.4.0 the pre-fix
+    and post-fix code agree, so a test at either would pass against the bug.
+    """
+
+    ANALYTICS = ("analyticsType", "analyticsId", "analyticsScriptUrl")
+
+    def _build(self, version):
+        api = MagicMock(spec=UptimeKumaApi)
+        api.version = version
+        api._parsed_version = UptimeKumaApi._parsed_version.__get__(api)
+        return UptimeKumaApi._build_status_page_data.__get__(api)
+
+    def _config(self, version, **kwargs):
+        build = self._build(version)
+        _, config, _, _ = build(slug="test", id=1, title="Test Page", **kwargs)
+        return config
+
+    # --- The bug condition: 2.0.x keeps googleAnalyticsId ---
+
+    def test_2_0_2_sends_google_analytics_id(self):
+        """A 2.0.2 server reads googleAnalyticsId, so it must be sent.
+
+        Pre-fix this key was withheld from every 2.0.x save, which is the data
+        loss issue #41 reports.
+        """
+        config = self._config("2.0.2", googleAnalyticsId="UA-123")
+        self.assertIn("googleAnalyticsId", config)
+        self.assertEqual(config["googleAnalyticsId"], "UA-123")
+
+    def test_2_0_2_omits_the_analytics_trio(self):
+        """A 2.0.2 server has no analytics_* columns, so none are sent."""
+        config = self._config("2.0.2", analyticsType="google",
+                              analyticsId="G-1", analyticsScriptUrl="u")
+        for key in self.ANALYTICS:
+            self.assertNotIn(key, config)
+
+    def test_2_0_0_and_2_0_1_behave_as_2_0_2(self):
+        """The whole 2.0.x line is below the floor, not just 2.0.2."""
+        for version in ("2.0.0", "2.0.1", "2.0.2"):
+            with self.subTest(version=version):
+                config = self._config(version, googleAnalyticsId="UA-123",
+                                      analyticsType="google")
+                self.assertIn("googleAnalyticsId", config)
+                self.assertNotIn("analyticsType", config)
+
+    def test_2_0_2_omits_showonlylastheartbeat_and_rsstitle(self):
+        """Both fields have a 2.1 floor in the registry; the builder agrees.
+
+        Pre-fix the builder placed them on a 2.0.x server, one minor version
+        looser than _V2_ONLY_STATUS_PAGE_FIELDS says.
+        """
+        config = self._config("2.0.2", showOnlyLastHeartbeat=True,
+                              rssTitle="Feed")
+        self.assertNotIn("showOnlyLastHeartbeat", config)
+        self.assertNotIn("rssTitle", config)
+
+    # --- The boundary itself ---
+
+    def test_2_1_0_is_the_first_version_with_the_trio(self):
+        """2.1.0 gets the analytics trio and loses googleAnalyticsId."""
+        config = self._config("2.1.0", googleAnalyticsId="UA-123",
+                              analyticsType="google", analyticsId="G-1",
+                              analyticsScriptUrl="u")
+        for key in self.ANALYTICS:
+            self.assertIn(key, config)
+        self.assertNotIn("googleAnalyticsId", config)
+
+    def test_2_1_0_sends_the_trio_even_when_none(self):
+        """The unconditional-send contract applies from the floor upward.
+
+        The server rejects the save outright when analyticsType is absent
+        (verified against 2.4.0), so presence -- not truthiness -- is what
+        matters, and that has to hold at 2.1.0 too, not only at 2.4.0.
+        """
+        config = self._config("2.1.0")
+        for key in self.ANALYTICS:
+            self.assertIn(key, config)
+            self.assertIsNone(config[key])
+
+    def test_pre_release_of_2_1_is_treated_as_2_1(self):
+        """2.1.0-beta.1 introduced the columns, so it must clear the floor.
+
+        _parsed_version compares on the release segment, so a pre-release of
+        the very version that adds a field is not rejected by its own floor --
+        the same trap the #28 per-type floors had to avoid.
+        """
+        config = self._config("2.1.0-beta.1")
+        for key in self.ANALYTICS:
+            self.assertIn(key, config)
+        self.assertNotIn("googleAnalyticsId", config)
+
+    # --- Unchanged behaviour on either side ---
+
+    def test_1_23_2_unchanged(self):
+        """v1 behaviour is untouched: googleAnalyticsId in, trio out."""
+        config = self._config("1.23.2", googleAnalyticsId="UA-123",
+                              analyticsType="google")
+        self.assertEqual(config["googleAnalyticsId"], "UA-123")
+        for key in self.ANALYTICS:
+            self.assertNotIn(key, config)
+
+    def test_2_4_0_unchanged(self):
+        """2.x behaviour above the floor is untouched."""
+        config = self._config("2.4.0", googleAnalyticsId="UA-123",
+                              analyticsType="google", analyticsId="G-1",
+                              analyticsScriptUrl="u",
+                              showOnlyLastHeartbeat=True, rssTitle="Feed")
+        self.assertEqual(config["analyticsType"], "google")
+        self.assertNotIn("googleAnalyticsId", config)
+        self.assertTrue(config["showOnlyLastHeartbeat"])
+        self.assertEqual(config["rssTitle"], "Feed")
+
+    # --- password is a separate boundary and really is 2.0 ---
+
+    def test_password_boundary_stays_at_2_0(self):
+        """password is ignored by the v2 server; its 2.0 boundary is unchanged.
+
+        Upstream comments the assignment out at 1.23.2, 2.0.0 and 2.1.0 alike,
+        so the analytics boundary being wrong says nothing about this one.
+        """
+        self.assertIn("password", self._config("1.23.2", password="secret"))
+        for version in ("2.0.2", "2.1.0", "2.4.0"):
+            with self.subTest(version=version):
+                self.assertNotIn(
+                    "password", self._config(version, password="secret"))
