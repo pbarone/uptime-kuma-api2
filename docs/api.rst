@@ -69,10 +69,16 @@ held in a separate internal registry (``_V2_ONLY_STATUS_PAGE_FIELDS``), and the
 version floor is ``2.1`` -- the Uptime Kuma release that introduced them.
 
 One exception: the analytics trio (``analyticsType``, ``analyticsId``,
-``analyticsScriptUrl``) is **not** gated. The server requires ``analyticsType``
-to be present in the payload and rejects the entire save when it is absent
-(verified against 2.4.0). Withholding is therefore not an available outcome for
-these fields; they are sent unconditionally, including when ``None``.
+``analyticsScriptUrl``) is **not** gated by that registry. The server requires
+``analyticsType`` to be present in the payload and rejects the entire save when
+it is absent (verified against 2.4.0). Withholding is therefore not an available
+outcome for these fields, so from ``2.1`` onward all three are sent
+unconditionally, including when ``None``.
+
+Below ``2.1`` they are not sent at all, because the columns do not exist yet.
+A server on ``1.x`` or ``2.0.x`` reads ``googleAnalyticsId`` instead, and that is
+what the library sends there. The trio and ``googleAnalyticsId`` are therefore
+never both present: which one you get is decided by the same ``2.1`` boundary.
 
 **Maintenance and settings.** Inventoried against upstream and confirmed: these
 surfaces have no v2-only fields. Every field ``add_maintenance``,
