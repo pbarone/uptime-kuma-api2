@@ -39,6 +39,24 @@ history is Conventional-Commit-clean.
 
 - **Never commit directly to `main`.** Work on a branch, open a PR, let CI run
   the full matrix, then merge.
+- **Create the branch before the first edit, not before the first commit.**
+  Branch protection is server-side, so a local commit on `main` succeeds and
+  only the push is rejected — the enforcement below protects the remote, not
+  your local branch. Moving a commit off local `main` afterwards means
+  `git reset --hard`, which is on the ask-first list. Branching first costs one
+  command and removes that path. `git switch -c <type>/<desc>` carries
+  uncommitted work over untouched, so it is also the fix if editing has already
+  started.
+- **Commit at the task boundaries, not once at the end.** A feature that lands as
+  a single commit discards the per-commit reasoning the merge-commit policy below
+  exists to preserve, and once pushed it cannot be recovered. For spec-driven work
+  the seams are already written down — the phases in that spec's `tasks.md`. In
+  practice that is the evidence and inventory artifacts, then the verification
+  script, then the implementation, then the tests, then docs and `CHANGELOG.md`,
+  each with a body saying why that step was taken. This is not a mandate to split
+  for its own sake: one coherent commit beats five arbitrary ones, and a commit per
+  file is worse than either. The test is whether a reader six months out would want
+  the steps narrated separately.
 - Branch names: `<type>/<short-description>`, where `<type>` is the
   Conventional Commit type of the change's dominant purpose — so any type from
   the **Types** list above is valid (`feat`, `fix`, `docs`, `test`, `ci`,
