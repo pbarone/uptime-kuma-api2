@@ -30,11 +30,11 @@ Supported Uptime Kuma versions:
 
 | Uptime Kuma    | uptime-kuma-api2 |
 |----------------|------------------|
-| 1.21.3 - 2.5.0 | 2.3.0 - 2.3.1    |
+| 1.21.3 - 2.5.0 | 2.3.0 - 2.5.0    |
 
 One install covers both majors — there is no separate v1 line to pin to. Server-version-specific behaviour is gated at runtime, so the same package works against a 1.x and a 2.x server.
 
-The range above is what the project tests against. The Docker matrix in `run_tests.sh` exercises the version gate boundaries across it — 1.21.3, 1.22.x, 1.23.x, 2.0.0, 2.1.0 and 2.5.0 — and this tree was additionally live-verified end to end against 1.23.2 and 2.5.0.
+The range above is what the project tests against. The Docker matrix in `run_tests.sh` exercises the version gate boundaries across it — 1.21.3, 1.22.x, 1.23.x, 2.0.0, 2.1.0 and 2.5.0 — and this tree was additionally live-verified end to end against 1.23.2, 2.0.2 and 2.5.0.
 
 Uptime Kuma older than 1.21.3 is **not** supported: that support was dropped in uptime-kuma-api 1.0.0. If you run one of those servers, use 0.13.0.
 

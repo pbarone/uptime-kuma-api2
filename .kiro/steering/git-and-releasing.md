@@ -143,6 +143,13 @@ Bump `uptime_kuma_api/__version__.py` — the single source of truth:
 
 1. Land all changes on `main` via PR; confirm the full matrix is green.
 2. Bump `__version__.py` and finalize the CHANGELOG entry (in the PR, not after).
+   **Also update the current-support row in `README.md`** — the
+   `uptime-kuma-api2` column must end at the version being released. `setup.py`
+   sets `long_description=readme`, so that table *is* the PyPI project page, and
+   it is the one release-prep step with no automated check behind it. It was
+   missed for 2.4.0: the row still read `2.3.0 - 2.3.1`, so 2.4.0 shipped a
+   project page implying the version you were reading about was unsupported.
+   Caught during 2.5.0 prep by `git log -S` on the row, not by anything failing.
 3. Tag: `git tag -a vX.Y.Z -m "..."` — the tag **must** match `__version__`
    (the publish workflow enforces this and fails otherwise).
 4. `git push origin vX.Y.Z` → the publish workflow runs: tests → tag/version
