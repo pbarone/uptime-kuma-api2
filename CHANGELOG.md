@@ -1,5 +1,27 @@
 ## Changelog
 ### Unreleased
+#### Features
+- **Status-page v2-only fields are now withheld and warned.** The
+  withhold-and-warn rule established in 2.4.0 for monitor fields now extends to
+  `save_status_page`. Two status-page fields introduced in Uptime Kuma 2.1.0
+  (`showOnlyLastHeartbeat`, `rssTitle`) are withheld from the payload and reported
+  via a single `UnsupportedFieldWarning` per call when the connected server is
+  below version 2.1. The rule is computed from `kwargs` before the
+  `get_status_page` round trip, so a value the server itself returned is never
+  treated as a caller request and an escalated warning costs no fetch.
+
+  The analytics trio (`analyticsType`, `analyticsId`, `analyticsScriptUrl`) is
+  **not** gated: the server requires `analyticsType` present and rejects its
+  absence (verified against 2.4.0). See issue #41 for the version boundary of
+  the analytics fields.
+
+  Maintenance and settings were inventoried against upstream and have no v2-only
+  surface: every field they accept exists at both 1.23.2 and 2.5.0.
+
+  Non-breaking: every call that succeeds today still succeeds and returns the
+  same value, with one warning added for newly-gated fields on a pre-2.1 server.
+  Addresses [pbarone/uptime-kuma-api2#33](https://github.com/pbarone/uptime-kuma-api2/issues/33).
+
 #### Bugfixes
 - `SYSTEM_SERVICE` is no longer accepted on Uptime Kuma 2.0.x, and the rejection message no longer names the wrong version. The four v2-only monitor types were gated behind a single `2.0` floor, but `system-service` first ships in **2.1.0** — so on 2.0.0, 2.0.1 and 2.0.2 the type passed the gate, `add_monitor` answered `{'msg': 'Added Successfully.', 'monitorID': n}`, and the monitor then sat `PENDING` indefinitely reporting `Unknown Monitor Type`. That is the same failure the 2.3.1 type gate exists to prevent, one minor version up, and the **silent** kind: nothing in the return value signalled it and the message a caller might have searched for never appeared. Each type now carries its own floor and the message names it, so a caller on 2.0.2 is told they need `2.1 or newer` rather than the self-contradicting `2.0 or newer`. Provenance is upstream source and tags rather than inference: `system-service` was introduced by [louislam/uptime-kuma#6488](https://github.com/louislam/uptime-kuma/pull/6488) (merge `6a700cb`, milestone 2.1.0), is absent from `src/pages/EditMonitor.vue` at tags 2.0.0, 2.0.2 and 2.1.0-beta.0, and first appears at 2.1.0-beta.1. `RABBITMQ`, `SNMP` and `SMTP` are 2.0.0 types, keep their `2.0` floor and keep their existing message verbatim. **This fix depends on the pre-release comparison shipped in 2.4.0 and would have been wrong without it:** under PEP 440 `2.1.0-beta.1` sorts *below* `2.1.0`, so a naive `>= 2.1` gate would have rejected the very release that introduced the type it gates. Because `_parsed_version()` now compares on the release segment, `2.1.0-beta.1` is gated as `2.1.0` and is correctly accepted — asserted directly rather than assumed. The private type constant changed shape from a `frozenset` to a type-to-floor mapping, deliberately mirroring the field registry added in 2.4.0 so the version comparison reads the same way in both places; the two are kept separate because a field and a type are different kinds of thing. A bare string type (`"system-service"`) is floored identically to the enum member, since `MonitorType` is a `str` Enum and inherits `str.__hash__` — the frozenset relied on the same property and there is a test pinning it. No public method, parameter, class or export was added, and `MonitorType` itself is untouched. Reported in [pbarone/uptime-kuma-api2#28](https://github.com/pbarone/uptime-kuma-api2/issues/28).
 

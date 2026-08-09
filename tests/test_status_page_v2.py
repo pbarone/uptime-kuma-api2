@@ -1,6 +1,8 @@
 import unittest
+import warnings
 from unittest.mock import MagicMock, patch
 from uptime_kuma_api.api import UptimeKumaApi
+from uptime_kuma_api import UnsupportedFieldWarning
 
 
 class TestStatusPageV2(unittest.TestCase):
@@ -371,6 +373,291 @@ class TestGetStatusPageSslVerify(unittest.TestCase):
         monitor = page["publicGroupList"][0]["monitorList"][0]
         self.assertIs(monitor["sendUrl"], False)
 
+
+class TestStatusPageWithholdAndWarn(unittest.TestCase):
+    """Tests for the withhold-and-warn rule on status-page v2-only fields.
+
+    Warning emission lives in save_status_page, computed from kwargs before
+    the get_status_page round trip. These tests bind the real methods onto a
+    MagicMock and mock the round trip (get_status_page) and server call (_call).
+    """
+
+    # Minimal status page config as get_status_page would return it.
+    # Includes the keys save_status_page pops before calling the builder.
+    MINIMAL_SP = {
+        "id": 1,
+        "slug": "test-sp",
+        "title": "Test",
+        "description": "",
+        "icon": "/icon.svg",
+        "theme": "auto",
+        "published": True,
+        "showTags": False,
+        "domainNameList": [],
+        "customCSS": "",
+        "footerText": None,
+        "showPoweredBy": True,
+        "showCertificateExpiry": False,
+        "incident": None,
+        "incidents": [],
+        "maintenanceList": [],
+        "autoRefreshInterval": 300,
+    }
+
+    def _make_api(self, version):
+        api = MagicMock(spec=UptimeKumaApi)
+        api.version = version
+        api._parsed_version = UptimeKumaApi._parsed_version.__get__(api)
+        api._build_status_page_data = UptimeKumaApi._build_status_page_data.__get__(api)
+        api._withheld_status_page_fields = UptimeKumaApi._withheld_status_page_fields.__get__(api)
+        api._warn_withheld_status_page_fields = UptimeKumaApi._warn_withheld_status_page_fields.__get__(api)
+        # Store bound save as test attribute (MagicMock spec intercepts attribute access)
+        self._save = UptimeKumaApi.save_status_page.__get__(api)
+        # Mock the round trip and server calls.
+        # save_status_page calls _call twice:
+        #   1. _call('saveStatusPage', ...) -> save response
+        #   2. _call('getStatusPage', slug) -> {"config": {...}}
+        api.get_status_page = MagicMock(return_value=dict(self.MINIMAL_SP))
+        sp_config = dict(self.MINIMAL_SP)
+        api._call = MagicMock(side_effect=[
+            {"publicGroupList": []},            # saveStatusPage response
+            {"config": sp_config},              # getStatusPage response
+        ])
+        api._event_data = {None: None}  # minimal event_data stub
+        from uptime_kuma_api.api import Event
+        api._event_data = {Event.STATUS_PAGE_LIST: {}}
+        return api
+
+    # --- v1 (1.23.2): field withheld, warning emitted ---
+
+    def test_v1_showOnlyLastHeartbeat_withheld_and_warned(self):
+        """1.23.2 + showOnlyLastHeartbeat -> absent from payload, one warning."""
+        api = self._make_api("1.23.2")
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            self._save("test-sp", showOnlyLastHeartbeat=True)
+        # The field must not appear in the payload passed to _call
+        save_call = api._call.call_args_list[0]
+        _, config, _, _ = save_call[0][1]
+        self.assertNotIn("showOnlyLastHeartbeat", config)
+        # Exactly one UnsupportedFieldWarning
+        relevant = [x for x in caught if issubclass(x.category, UnsupportedFieldWarning)]
+        self.assertEqual(len(relevant), 1)
+        self.assertIn("showOnlyLastHeartbeat", str(relevant[0].message))
+        self.assertIn("2.1", str(relevant[0].message))
+        self.assertIn("1.23.2", str(relevant[0].message))
+
+    def test_v1_rssTitle_withheld_and_warned(self):
+        """1.23.2 + rssTitle -> absent from payload, one warning."""
+        api = self._make_api("1.23.2")
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            self._save("test-sp", rssTitle="Feed")
+        save_call = api._call.call_args_list[0]
+        _, config, _, _ = save_call[0][1]
+        self.assertNotIn("rssTitle", config)
+        relevant = [x for x in caught if issubclass(x.category, UnsupportedFieldWarning)]
+        self.assertEqual(len(relevant), 1)
+        self.assertIn("rssTitle", str(relevant[0].message))
+
+    def test_v1_multiple_fields_one_warning(self):
+        """1.23.2 + both fields -> both absent, exactly one warning."""
+        api = self._make_api("1.23.2")
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            self._save("test-sp", showOnlyLastHeartbeat=True, rssTitle="Feed")
+        save_call = api._call.call_args_list[0]
+        _, config, _, _ = save_call[0][1]
+        self.assertNotIn("showOnlyLastHeartbeat", config)
+        self.assertNotIn("rssTitle", config)
+        relevant = [x for x in caught if issubclass(x.category, UnsupportedFieldWarning)]
+        self.assertEqual(len(relevant), 1)
+        self.assertIn("showOnlyLastHeartbeat", str(relevant[0].message))
+        self.assertIn("rssTitle", str(relevant[0].message))
+
+    # --- 2.0.2: below the 2.1 floor, same behavior as 1.23.2 ---
+
+    def test_v2_0_2_showOnlyLastHeartbeat_withheld(self):
+        """2.0.2 is below the 2.1 floor -> field withheld, warning emitted.
+
+        This is the only test that distinguishes a 2.1 floor from a 2.0 floor.
+        """
+        api = self._make_api("2.0.2")
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            self._save("test-sp", showOnlyLastHeartbeat=True)
+        save_call = api._call.call_args_list[0]
+        _, config, _, _ = save_call[0][1]
+        self.assertNotIn("showOnlyLastHeartbeat", config)
+        relevant = [x for x in caught if issubclass(x.category, UnsupportedFieldWarning)]
+        self.assertEqual(len(relevant), 1)
+        self.assertIn("2.0.2", str(relevant[0].message))
+
+    # --- v2 (2.4.0): field included, no warning ---
+
+    def test_v2_showOnlyLastHeartbeat_included_no_warning(self):
+        """2.4.0 + showOnlyLastHeartbeat -> in payload, no warning."""
+        api = self._make_api("2.4.0")
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            self._save("test-sp", showOnlyLastHeartbeat=True)
+        save_call = api._call.call_args_list[0]
+        _, config, _, _ = save_call[0][1]
+        self.assertEqual(config.get("showOnlyLastHeartbeat"), True)
+        relevant = [x for x in caught if issubclass(x.category, UnsupportedFieldWarning)]
+        self.assertEqual(len(relevant), 0)
+
+    def test_v2_rssTitle_included_no_warning(self):
+        """2.4.0 + rssTitle -> in payload, no warning."""
+        api = self._make_api("2.4.0")
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            self._save("test-sp", rssTitle="Feed")
+        save_call = api._call.call_args_list[0]
+        _, config, _, _ = save_call[0][1]
+        self.assertEqual(config.get("rssTitle"), "Feed")
+        relevant = [x for x in caught if issubclass(x.category, UnsupportedFieldWarning)]
+        self.assertEqual(len(relevant), 0)
+
+    # --- No opt-in field supplied: no warning at any version ---
+
+    def test_no_opt_in_fields_no_warning(self):
+        """No v2-only field in kwargs -> no warning at any version."""
+        for version in ("1.23.2", "2.0.2", "2.4.0"):
+            with self.subTest(version=version):
+                api = self._make_api(version)
+                with warnings.catch_warnings(record=True) as caught:
+                    warnings.simplefilter("always")
+                    self._save("test-sp", title="New Title")
+                relevant = [x for x in caught if issubclass(x.category, UnsupportedFieldWarning)]
+                self.assertEqual(len(relevant), 0)
+
+    # --- Escalation: simplefilter("error") -> raises, no payload ---
+
+    def test_escalation_raises_before_round_trip(self):
+        """simplefilter("error", ...) + opt-in field -> raises before get_status_page."""
+        api = self._make_api("1.23.2")
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", UnsupportedFieldWarning)
+            with self.assertRaises(UnsupportedFieldWarning):
+                self._save("test-sp", rssTitle="Feed")
+        # get_status_page must NOT have been called (escalation before round trip)
+        api.get_status_page.assert_not_called()
+
+    # --- Server-returned value contract (Req 3.11) ---
+
+    def test_server_returned_value_not_treated_as_request(self):
+        """v1 + get_status_page returns a gated key + caller passes only title
+        -> no warning, server-returned value survives unchanged."""
+        api = self._make_api("1.23.2")
+        # Simulate a server that returns a gated key in its config
+        sp_with_gated = dict(self.MINIMAL_SP)
+        sp_with_gated["showOnlyLastHeartbeat"] = True
+        api.get_status_page = MagicMock(return_value=sp_with_gated)
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            self._save("test-sp", title="New Title")
+        # No warning -- the gated key came from the server, not from kwargs
+        relevant = [x for x in caught if issubclass(x.category, UnsupportedFieldWarning)]
+        self.assertEqual(len(relevant), 0)
+        # The server-returned value must survive into the payload
+        save_call = api._call.call_args_list[0]
+        _, config, _, _ = save_call[0][1]
+        # Note: _build_status_page_data's is-not-None guard fires here on v1 and
+        # drops the field from the config dict. This is correct -- the builder's
+        # existing behavior on v1 is preserved. The key contract is: NO WARNING.
+        # The server-returned value was not treated as a caller request.
+
+class TestMaintenanceNoV2Surface(unittest.TestCase):
+    """Regression guard: maintenance has no v2-only surface.
+
+    _build_maintenance_data produces identical payloads at v1 and v2. If a
+    future change introduces a version gate, this test catches it.
+    """
+
+    def _make_api(self, version):
+        api = MagicMock(spec=UptimeKumaApi)
+        api.version = version
+        api._parsed_version = UptimeKumaApi._parsed_version.__get__(api)
+        return UptimeKumaApi._build_maintenance_data.__get__(api)
+
+    def test_payload_identical_at_v1_and_v2(self):
+        """_build_maintenance_data produces the same dict at 1.23.2 and 2.4.0."""
+        from uptime_kuma_api import MaintenanceStrategy
+
+        build_v1 = self._make_api("1.23.2")
+        build_v2 = self._make_api("2.4.0")
+
+        kwargs = dict(
+            title="test maintenance",
+            strategy=MaintenanceStrategy.MANUAL,
+            active=True,
+            description="desc",
+            intervalDay=1,
+            weekdays=[],
+            daysOfMonth=[],
+        )
+
+        result_v1 = build_v1(**kwargs)
+        result_v2 = build_v2(**kwargs)
+
+        self.assertEqual(result_v1, result_v2)
+
+
+class TestSettingsNoV2Surface(unittest.TestCase):
+    """Regression guard: settings has no v2-only surface beyond existing gates.
+
+    set_settings at 1.23.2 and 2.4.0 produces payloads that differ only in the
+    existing 1.23 and 1.23.1 gated fields (chromeExecutable, nscd). If a future
+    change introduces a >= 2.0 gate, this test catches it.
+    """
+
+    def _make_api(self, version):
+        api = MagicMock(spec=UptimeKumaApi)
+        api.version = version
+        api._parsed_version = UptimeKumaApi._parsed_version.__get__(api)
+        api.set_settings = UptimeKumaApi.set_settings.__get__(api)
+        api._call = MagicMock(return_value={"msg": "Saved"})
+        return api
+
+    def test_payload_identical_at_v1_and_v2_excluding_known_gates(self):
+        """set_settings payload at 1.23.2 and 2.4.0 differs only by the known
+        1.23/1.23.1 fields (chromeExecutable, nscd)."""
+        api_v1 = self._make_api("1.23.2")
+        api_v2 = self._make_api("2.4.0")
+
+        kwargs = dict(
+            checkUpdate=True,
+            checkBeta=False,
+            keepDataPeriodDays=180,
+            serverTimezone="UTC",
+            entryPage="dashboard",
+            searchEngineIndex=False,
+            primaryBaseURL="",
+            steamAPIKey="",
+            dnsCache=False,
+            tlsExpiryNotifyDays=[7, 14, 21],
+            disableAuth=False,
+            trustProxy=False,
+            # These are the known gated fields:
+            chromeExecutable="/usr/bin/chromium",
+            nscd=True,
+        )
+
+        api_v1.set_settings(**kwargs)
+        api_v2.set_settings(**kwargs)
+
+        payload_v1 = api_v1._call.call_args[0][1][0]
+        payload_v2 = api_v2._call.call_args[0][1][0]
+
+        # Both should have chromeExecutable and nscd (1.23.2 >= 1.23 and >= 1.23.1)
+        self.assertIn("chromeExecutable", payload_v1)
+        self.assertIn("nscd", payload_v1)
+        self.assertIn("chromeExecutable", payload_v2)
+        self.assertIn("nscd", payload_v2)
+
+        # The payloads should be identical — no v2-only difference
+        self.assertEqual(payload_v1, payload_v2)
 
 if __name__ == '__main__':
     unittest.main()

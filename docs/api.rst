@@ -12,8 +12,8 @@ Main Interface
 
 .. _v2-only-fields:
 
-Version-gated monitor fields
-----------------------------
+Version-gated fields
+--------------------
 
 This library supports a range of Uptime Kuma server versions from one codebase,
 and some monitor fields only exist from a certain server version onward. When you
@@ -62,6 +62,22 @@ regardless of what the server would have accepted.
 Monitor *types* are governed separately. A type the server has no implementation
 of raises rather than being degraded, since a type is the thing being requested
 rather than a parameter whose loss can be absorbed.
+
+**Status-page fields.** The same withhold-and-warn rule applies to
+:meth:`~uptime_kuma_api.UptimeKumaApi.save_status_page`. The gated fields are
+held in a separate internal registry (``_V2_ONLY_STATUS_PAGE_FIELDS``), and the
+version floor is ``2.1`` -- the Uptime Kuma release that introduced them.
+
+One exception: the analytics trio (``analyticsType``, ``analyticsId``,
+``analyticsScriptUrl``) is **not** gated. The server requires ``analyticsType``
+to be present in the payload and rejects the entire save when it is absent
+(verified against 2.4.0). Withholding is therefore not an available outcome for
+these fields; they are sent unconditionally, including when ``None``.
+
+**Maintenance and settings.** Inventoried against upstream and confirmed: these
+surfaces have no v2-only fields. Every field ``add_maintenance``,
+``edit_maintenance`` and ``set_settings`` accept today exists at both 1.23.2 and
+the latest 2.x release. No version gate is needed and none is applied.
 
 
 MonitorBuilder
