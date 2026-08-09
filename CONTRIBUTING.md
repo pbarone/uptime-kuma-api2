@@ -158,6 +158,11 @@ This repo commits AI-agent guidance under `.kiro/steering/`. Because those
 files instruct coding agents, changes to them are reviewed with the same care
 as code — treat a PR that edits steering as a code change, not a docs tweak.
 
+## AI-assisted development
+
+Development uses AI-assisted tooling. All output is reviewed by the maintainer
+and verified against live Uptime Kuma instances before release.
+
 ## Reporting bugs and requesting features
 
 Use the issue templates. For bugs, the Uptime Kuma **server version**, the
