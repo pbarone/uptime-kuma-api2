@@ -165,6 +165,24 @@ _V2_ONLY_MONITOR_FIELDS = {
 }
 
 
+# Status-page fields Uptime Kuma only accepts from the stated version onward.
+# Follows the same rule as _V2_ONLY_MONITOR_FIELDS: a caller-supplied value below
+# the floor is withheld from the payload and reported once per call as an
+# UnsupportedFieldWarning. The analytics trio is NOT here -- the v2 server
+# requires analyticsType present and rejects its absence (see issue #33).
+#
+# Floors are the upstream release each field first shipped in, established from
+# Uptime Kuma's own source and tags. Provenance:
+# .kiro/specs/v2-only-non-monitor-surfaces/upstream-inventory.md
+# .kiro/specs/v2-only-non-monitor-surfaces/v1-verification-results.md
+_V2_ONLY_STATUS_PAGE_FIELDS = {
+    # present at 2.1.0, absent at 2.0.2 -- server/socket-handlers/
+    # status-page-socket-handler.js, server/model/status_page.js
+    "showOnlyLastHeartbeat": "2.1",
+    "rssTitle": "2.1",
+}
+
+
 def int_to_bool(data, keys) -> None:
     if isinstance(data, list):
         for d in data:
@@ -1055,6 +1073,63 @@ class UptimeKumaApi(object):
         warnings.warn(
             f"the server reports version {version}, which does not support "
             f"{len(withheld)} requested monitor field{plural}, so "
+            f"{'they were' if plural else 'it was'} not sent: {detail}",
+            UnsupportedFieldWarning,
+            stacklevel=stacklevel,
+        )
+
+    def _withheld_status_page_fields(self, supplied) -> list:
+        """
+        Names the version-gated status-page fields this call cannot send.
+
+        Iterates :data:`_V2_ONLY_STATUS_PAGE_FIELDS` in declaration order, so
+        the returned order -- and therefore the warning message, and the
+        duplicate-suppression key the warnings module derives from it -- is
+        stable.
+
+        :param dict supplied: Caller-supplied values keyed by parameter name
+                              (the kwargs dict from save_status_page). A key
+                              mapped to None counts as not supplied.
+        :return: The withheld field names, in registry declaration order.
+        :rtype: list
+        """
+        parsed = self._parsed_version()
+        withheld = []
+        for name, floor in _V2_ONLY_STATUS_PAGE_FIELDS.items():
+            if supplied.get(name) is None:
+                continue
+            if parsed < parse_version(floor):
+                withheld.append(name)
+        return withheld
+
+    def _warn_withheld_status_page_fields(self, withheld, stacklevel) -> None:
+        """
+        Reports withheld status-page fields once, as a single
+        :class:`UnsupportedFieldWarning`.
+
+        Same contract as :meth:`_warn_withheld_v2_fields` but with status-page-
+        specific wording.
+
+        :param list withheld: Field names from
+                              :meth:`_withheld_status_page_fields`.
+        :param int stacklevel: How many frames to skip so the warning blames
+                               the caller's line. 3 from save_status_page (here,
+                               that method, the caller).
+        :raises UnsupportedFieldWarning: If the caller has escalated the
+                                         category with
+                                         ``warnings.simplefilter("error", ...)``.
+        """
+        if not withheld:
+            return
+        version = self.version
+        detail = ", ".join(
+            f"{name} (requires {_V2_ONLY_STATUS_PAGE_FIELDS[name]} or newer)"
+            for name in withheld
+        )
+        plural = "s" if len(withheld) > 1 else ""
+        warnings.warn(
+            f"the server reports version {version}, which does not support "
+            f"{len(withheld)} requested status-page field{plural}, so "
             f"{'they were' if plural else 'it was'} not sent: {detail}",
             UnsupportedFieldWarning,
             stacklevel=stacklevel,
@@ -2734,8 +2809,11 @@ class UptimeKumaApi(object):
             return r
 
     def save_status_page(self, slug: str, **kwargs) -> dict:
-        """
+        r"""
         Save a status page.
+
+        Some status-page fields only exist from a certain Uptime Kuma version
+        onward. See :ref:`v2-only-fields` for the rule that governs them.
 
         :param str slug: Slug
         :param int id: Id of the status page to save
@@ -2790,13 +2868,28 @@ class UptimeKumaApi(object):
                 ]
             }
         """
+        # Decide from kwargs BEFORE the merge, then merge only what survives.
+        #
+        # Deleting keys after the merge would be the wrong shape: del data[key]
+        # cannot tell a key the caller supplied from one get_status_page returned,
+        # so a status page already carrying a v2-only column would lose it on any
+        # unrelated save. Computing the withheld set from kwargs keeps the
+        # server's own data untouched.
+        withheld = self._withheld_status_page_fields(kwargs)
+        # stacklevel 3: this helper, this method, the caller.
+        # Warned before get_status_page so an escalated warning costs no
+        # round trip.
+        self._warn_withheld_status_page_fields(withheld, stacklevel=3)
+
         status_page = self.get_status_page(slug)
         status_page.pop("incident")
         status_page.pop("incidents", None)  # v2.1.0+ shape, absent on older servers
         status_page.pop("maintenanceList")
         status_page.pop("autoRefreshInterval", None)
         status_page.pop("googleAnalyticsId", None)  # v2 may still return this legacy field
-        status_page.update(kwargs)
+        status_page.update(
+            {k: v for k, v in kwargs.items() if k not in withheld}
+        )
         data = self._build_status_page_data(**status_page)
         r = self._call('saveStatusPage', data)
 

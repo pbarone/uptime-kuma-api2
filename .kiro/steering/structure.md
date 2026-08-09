@@ -59,7 +59,8 @@ and was one of seven copies that had to be edited in lockstep.
   needs an endpoint with a genuinely untrusted certificate, set via
   `UPTIME_KUMA_SELFSIGNED_URL`. `live_test_delete_id.py` creates and deletes one
   monitor, so point it at a disposable instance only.
-- **v1 live script** (`live_test_conditions_v1.py`): the odd one out — it targets
+- **v1 live scripts** (`live_test_conditions_v1.py`,
+  `live_test_v2_only_fields_v1.py`, `live_test_status_page_v1.py`): the odd ones out — it targets
   a **disposable Uptime Kuma 1.23.x container**, not the 2.x instance the scripts
   above use, and it reads its own `UPTIME_KUMA_V1_URL` /
   `UPTIME_KUMA_V1_USERNAME` / `UPTIME_KUMA_V1_PASSWORD` keys rather than the
