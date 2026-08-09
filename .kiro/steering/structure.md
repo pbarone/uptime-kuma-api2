@@ -59,15 +59,31 @@ and was one of seven copies that had to be edited in lockstep.
   needs an endpoint with a genuinely untrusted certificate, set via
   `UPTIME_KUMA_SELFSIGNED_URL`. `live_test_delete_id.py` creates and deletes one
   monitor, so point it at a disposable instance only.
-- **v1 live scripts** (`live_test_conditions_v1.py`,
-  `live_test_v2_only_fields_v1.py`, `live_test_status_page_v1.py`): the odd ones out — it targets
-  a **disposable Uptime Kuma 1.23.x container**, not the 2.x instance the scripts
-  above use, and it reads its own `UPTIME_KUMA_V1_URL` /
+- **Disposable-container live scripts** — the odd ones out. Each targets a
+  **throwaway container at one specific server version**, not the real 2.x
+  instance the scripts above use, and each reads its own `UPTIME_KUMA_V1_URL` /
   `UPTIME_KUMA_V1_USERNAME` / `UPTIME_KUMA_V1_PASSWORD` keys rather than the
-  `tests/.env` 2.x keys, so it cannot accidentally hit the 2.x target. It refuses
-  to run if the URL is unset (no default) and aborts unless the server reports
-  `1.23`. It creates monitors, so disposable instances only. Not part of the 2.x
-  backup → create → cleanup cycle; run it on its own.
+  `tests/.env` keys, so none can accidentally hit the real target. Every one
+  refuses to run if the URL is unset (no default) and aborts unless the server
+  reports the version it is written for — a mistargeted URL fails closed rather
+  than mutating something. They create monitors or status pages, so disposable
+  instances only, and none belongs in the 2.x backup → create → cleanup cycle.
+  Run them through `scripts/run_disposable_kuma.ps1`, which starts and destroys
+  the container and keeps the Docker host out of its output.
+
+  Named by the version each asserts rather than grouped as "v1", because that
+  is what actually distinguishes them and the set is no longer one version line:
+
+  - `live_test_conditions_v1.py`, `live_test_v2_only_fields_v1.py`,
+    `live_test_status_page_v1.py` — assert `1.23`.
+  - `live_test_status_page_analytics_v2_0.py` — asserts `2.0`. A 2.x container
+    additionally needs `-DockerEnv UPTIME_KUMA_DB_TYPE=sqlite`, or it never
+    mounts socket.io; see that runner's `.EXAMPLE`.
+
+  The `UPTIME_KUMA_V1_*` key names are historical: they mean "the disposable
+  container", whatever version it runs. The runner deliberately offers no way to
+  change that prefix, so do not add one — the split from the `UPTIME_KUMA_*`
+  keys is the safety property, not the `V1` in the name.
 
 ## Where changes usually go
 
