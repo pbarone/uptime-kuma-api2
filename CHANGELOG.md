@@ -1,4 +1,8 @@
 ## Changelog
+### Unreleased
+#### Features
+- `ssl_verify` now also accepts a `str` or `os.PathLike` path to a CA bundle file, to verify against a custom CA instead of only toggling system-CA verification on or off. `socketio.Client(ssl_verify=<path>)` alone does nothing (engineio only checks the value for truthiness) so the path is instead applied through a `requests.Session` passed as `http_session`, which engineio does read a custom CA bundle off (`http.verify`). The same converted path is stored on `self.ssl_verify` and reaches `get_status_page`'s `requests.get(verify=...)` call unchanged, so both the socket.io and HTTP legs verify against the same bundle. The path must point to a readable file; a directory or a nonexistent path raises `ValueError` from the constructor. Requested in [pbarone/uptime-kuma-api2#32](https://github.com/pbarone/uptime-kuma-api2/issues/32), implemented by @Firq-ow.
+
 ### Release 2.5.0
 A feature release, and non-breaking on every final release in the supported
 1.21.3 through Uptime Kuma 2.5.0 range: a call that succeeds against 2.4.0 still

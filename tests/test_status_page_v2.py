@@ -1,5 +1,8 @@
+import os
+import tempfile
 import unittest
 import warnings
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 from uptime_kuma_api.api import UptimeKumaApi
 from uptime_kuma_api import UnsupportedFieldWarning
@@ -269,6 +272,28 @@ class TestGetStatusPageSslVerify(unittest.TestCase):
             kwargs["verify"],
             f"expected verify=True on the default path, got verify={kwargs['verify']!r}",
         )
+
+    def test_path_ssl_verify_forwarded_as_converted_str(self):
+        """A path passed to ssl_verify must reach requests.get as a str, not a Path.
+
+        **Validates: Concern raised in Issue #32**
+
+        The socket.io leg accepts a PathLike for ssl_verify, but the HTTP leg
+        must see a str. The conversion must be done with os.fspath() so that a
+        PathLike whose __fspath__() and __str__() disagree still reaches the
+        HTTP leg as the correct path.
+        """
+        with tempfile.NamedTemporaryFile(delete=False) as tmp:
+            ca_path = tmp.name
+        try:
+            mock_get = self._fetch_status_page(ssl_verify=Path(ca_path))
+        finally:
+            os.unlink(ca_path)
+
+        mock_get.assert_called_once()
+        kwargs = mock_get.call_args.kwargs
+        self.assertIsInstance(kwargs["verify"], str)
+        self.assertEqual(kwargs["verify"], ca_path)
 
     def test_default_returns_unchanged_top_level_shape(self):
         """Default path returns the same keys/values as before the fix.

@@ -39,6 +39,11 @@ setup(
     python_requires=">=3.8, <4",
     install_requires=[
         "python-socketio[client]>=5.0.0",
+        # ssl_verify accepts a CA bundle path via socketio.Client(http_session=...).
+        # This mechanism was added to engineio in 4.0.1. python-socketio>=5.0.0 alone
+        # can resolve engineio 3.x ( custom CA path is silently a no-op), which is
+        # why the floor is declared explicitly
+        "python-engineio>=4.0.1",
         "packaging",
         # api.py imports requests at module scope for the status-page HTTP
         # fetch. It resolves in practice via python-socketio's [client] extra,
