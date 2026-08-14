@@ -1,5 +1,8 @@
 ## Changelog
-### Unreleased
+### Release 2.7.0
+A feature release adding the PM2 monitor type and 34 notification providers
+from Uptime Kuma 2.5.0. Non-breaking on every final release in the supported
+1.21.3 through Uptime Kuma 2.5.0 range.
 
 #### Features
 - **PM2 monitor type** (server 2.5.0+): checks if a PM2 process is online.
@@ -12,6 +15,10 @@
   SIGNL4, SMS.ir, SMSPartner, SMSPlanet, SpugPush, Teltonika, Threema, WAHA,
   Web Push, Whapi, 360messenger (WhatsApp), WPush, YZJ. Closes
   [#55](https://github.com/pbarone/uptime-kuma-api2/issues/55).
+
+#### Bugfixes
+- Fixed false-positive `certificate` monitor type in the upstream coverage
+  detection script (was matching a SQL string inside `globalping.js`).
 
 ### Release 2.6.0
 A feature release adding new monitor types, notification providers, and custom
