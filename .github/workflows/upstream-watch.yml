@@ -24,10 +24,11 @@ jobs:
 
       - name: Check upstream coverage
         id: coverage
+        continue-on-error: true
         run: python scripts/check_upstream_coverage.py
 
       - name: Open issue if gaps found
-        if: failure() && steps.coverage.outputs.has_gaps == 'true'
+        if: steps.coverage.outputs.has_gaps == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
