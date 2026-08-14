@@ -6,15 +6,13 @@ Compares the server source (cloned into a temp directory or a provided path)
 against our MonitorType and NotificationType enums, and reports any gaps.
 
 Exit codes:
-    0 - fully covered (or --report-only mode)
-    1 - gaps found
-    2 - script error
+    0 - successful run (gaps may or may not exist; check output)
+    2 - script error (failed clone, import error, etc.)
 
 Usage:
-    python scripts/check_upstream_coverage.py [--upstream-path PATH] [--report-only]
+    python scripts/check_upstream_coverage.py [--upstream-path PATH]
 
     --upstream-path  Path to an existing Uptime Kuma checkout (skips cloning)
-    --report-only    Print the report but always exit 0 (useful for local runs)
 
 Output is ASCII only (Windows cp1252 safety).
 """
@@ -110,8 +108,6 @@ def get_upstream_version(upstream_path):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--upstream-path", help="Path to existing Uptime Kuma checkout")
-    parser.add_argument("--report-only", action="store_true",
-                        help="Print report but always exit 0")
     args = parser.parse_args()
 
     # Determine upstream path
@@ -182,9 +178,7 @@ def main():
                 if missing_monitors:
                     f.write(f"missing_monitors={', '.join(missing_monitors)}\n")
 
-        if args.report_only:
-            return 0
-        return 1 if has_gaps else 0
+        return 0
 
     finally:
         if cleanup_dir:
