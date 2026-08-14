@@ -2573,6 +2573,8 @@ V2_ONLY_TYPE_CASES = {
     MonitorType.WEBSOCKET_UPGRADE: dict(url="ws://127.0.0.1:8080"),
     MonitorType.GLOBALPING: dict(hostname="example.com"),
     MonitorType.SIP_OPTIONS: dict(hostname="127.0.0.1", port=5060),
+    MonitorType.ORACLEDB: dict(databaseConnectionString="localhost:1521/ORCL"),
+    MonitorType.NTP: dict(hostname="pool.ntp.org"),
 }
 
 # Monitor types that exist on both majors. These must be entirely unaffected by
@@ -2833,7 +2835,7 @@ class TestV2OnlyMonitorTypesPreservation(unittest.TestCase):
 
         **Validates: Requirements 3.1, issue #29**
         """
-        build = self._build_for("2.4.0")
+        build = self._build_for("2.5.0")
         # ``rabbitmqNodes`` is JSON-serialised on the way into the payload, so
         # the expectation records the observed wire value rather than the input.
         expected_companions = {
@@ -2852,6 +2854,10 @@ class TestV2OnlyMonitorTypesPreservation(unittest.TestCase):
             MonitorType.WEBSOCKET_UPGRADE: {"url": "ws://127.0.0.1:8080"},
             MonitorType.GLOBALPING: {"hostname": "example.com"},
             MonitorType.SIP_OPTIONS: {"hostname": "127.0.0.1"},
+            MonitorType.ORACLEDB: {
+                "databaseConnectionString": "localhost:1521/ORCL",
+            },
+            MonitorType.NTP: {"hostname": "pool.ntp.org"},
         }
         for type_, kwargs in V2_ONLY_TYPE_CASES.items():
             with self.subTest(type=type_):
@@ -2973,7 +2979,7 @@ class TestV2OnlyMonitorTypesPreservation(unittest.TestCase):
 # up/down verdict rather than how the check runs.
 # ---------------------------------------------------------------------------
 
-V2_VERSION = "2.4.0"
+V2_VERSION = "2.5.0"
 FLOOR_VERSION = "2.0"
 
 # Minimal kwargs per monitor type. _build_monitor_data does not enforce the
@@ -2989,6 +2995,7 @@ FIELD_TYPE_BASES = {
         "hostname": "127.0.0.1", "port": 1883, "mqttTopic": "t",
     },
     MonitorType.SNMP: {"hostname": "127.0.0.1", "snmpOid": "1.3.6"},
+    MonitorType.NTP: {"hostname": "pool.ntp.org"},
 }
 
 # A value for every registry field. Three of them are constrained by the
@@ -3023,6 +3030,9 @@ FIELD_SAMPLE_VALUES = {
     "ping_per_request_timeout": 5,
     "mqttWebsocketPath": "/mqtt",
     "mqttCheckType": "keyword",
+    "ntpStratumThreshold": 5,
+    "ntpTimeOffsetThreshold": 1000,
+    "ntpRootDispersionThreshold": 500,
 }
 
 # Falsy-but-not-None values. The emission test is `is not None`, so these are
@@ -3163,7 +3173,8 @@ class TestV2OnlyFieldsWithheld(_V2FieldsApiMixin, unittest.TestCase):
         """
         for name in _withhold_fields():
             with self.subTest(field=name):
-                result = self._build_field(FLOOR_VERSION, name)
+                floor = _V2_ONLY_MONITOR_FIELDS[name].floor
+                result = self._build_field(floor, name)
                 self.assertIn(name, result)
 
     def test_type_restriction_holds_on_both_majors(self):
@@ -3907,6 +3918,8 @@ class TestPerTypeVersionFloors(unittest.TestCase):
                 MonitorType.WEBSOCKET_UPGRADE: "2.1",
                 MonitorType.GLOBALPING: "2.1",
                 MonitorType.SIP_OPTIONS: "2.1",
+                MonitorType.ORACLEDB: "2.3",
+                MonitorType.NTP: "2.5",
             },
         )
 
@@ -3929,6 +3942,308 @@ class TestPerTypeVersionFloors(unittest.TestCase):
         import uptime_kuma_api
 
         self.assertNotIn("_V2_ONLY_MONITOR_TYPES", dir(uptime_kuma_api))
+
+
+class TestNTPMonitorType(unittest.TestCase):
+    """Tests for NTP monitor type fields and version gating."""
+
+    def setUp(self):
+        self.api = MagicMock(spec=UptimeKumaApi)
+        self.api.version = "2.5.0"
+        self.api._parsed_version = UptimeKumaApi._parsed_version.__get__(self.api)
+        self.api._withheld_v2_fields = (
+            UptimeKumaApi._withheld_v2_fields.__get__(self.api)
+        )
+        self.api._warn_withheld_v2_fields = (
+            UptimeKumaApi._warn_withheld_v2_fields.__get__(self.api)
+        )
+        self.api._check_conditions_supported = (
+            UptimeKumaApi._check_conditions_supported.__get__(self.api)
+        )
+        self.api._check_monitor_type_supported = (
+            UptimeKumaApi._check_monitor_type_supported.__get__(self.api)
+        )
+        self.build = UptimeKumaApi._build_monitor_data.__get__(self.api)
+
+    def _build_at_version(self, version):
+        """Return a _build_monitor_data bound to a mock at the given version."""
+        api = MagicMock(spec=UptimeKumaApi)
+        api.version = version
+        api._parsed_version = UptimeKumaApi._parsed_version.__get__(api)
+        api._withheld_v2_fields = (
+            UptimeKumaApi._withheld_v2_fields.__get__(api)
+        )
+        api._warn_withheld_v2_fields = (
+            UptimeKumaApi._warn_withheld_v2_fields.__get__(api)
+        )
+        api._check_conditions_supported = (
+            UptimeKumaApi._check_conditions_supported.__get__(api)
+        )
+        api._check_monitor_type_supported = (
+            UptimeKumaApi._check_monitor_type_supported.__get__(api)
+        )
+        return UptimeKumaApi._build_monitor_data.__get__(api)
+
+    # ─── NTP accepted on v2.5+ ────────────────────────────────────────
+
+    def test_ntp_accepted_on_v2_5(self):
+        """NTP type is accepted on a 2.5 server."""
+        result = self.build(
+            type=MonitorType.NTP,
+            name="NTP test",
+            hostname="pool.ntp.org",
+        )
+        self.assertEqual(result["type"], MonitorType.NTP)
+        self.assertEqual(result["hostname"], "pool.ntp.org")
+
+    def test_ntp_default_port_123(self):
+        """NTP type defaults port to 123 when not specified."""
+        result = self.build(
+            type=MonitorType.NTP,
+            name="NTP test",
+            hostname="pool.ntp.org",
+        )
+        self.assertEqual(result["port"], 123)
+
+    def test_ntp_custom_port(self):
+        """NTP type respects a custom port."""
+        result = self.build(
+            type=MonitorType.NTP,
+            name="NTP test",
+            hostname="pool.ntp.org",
+            port=1234,
+        )
+        self.assertEqual(result["port"], 1234)
+
+    def test_ntp_rejected_on_v1(self):
+        """NTP type raises on a pre-2.0 server."""
+        build = self._build_at_version("1.23.2")
+        with self.assertRaises(UptimeKumaException) as ctx:
+            build(type=MonitorType.NTP, name="t", hostname="pool.ntp.org")
+        self.assertIn("ntp", str(ctx.exception))
+        self.assertIn("2.5", str(ctx.exception))
+        self.assertIn("1.23.2", str(ctx.exception))
+
+    def test_ntp_rejected_on_v2_4(self):
+        """NTP type raises on a 2.4 server (below 2.5 floor)."""
+        build = self._build_at_version("2.4.0")
+        with self.assertRaises(UptimeKumaException) as ctx:
+            build(type=MonitorType.NTP, name="t", hostname="pool.ntp.org")
+        self.assertIn("ntp", str(ctx.exception))
+        self.assertIn("2.5", str(ctx.exception))
+
+    # ─── NTP threshold fields version-gated ───────────────────────────
+
+    def test_ntp_thresholds_included_on_v2_5(self):
+        """NTP threshold fields are included on a 2.5 server."""
+        result = self.build(
+            type=MonitorType.NTP,
+            name="NTP test",
+            hostname="pool.ntp.org",
+            ntpStratumThreshold=3,
+            ntpTimeOffsetThreshold=500,
+            ntpRootDispersionThreshold=250,
+        )
+        self.assertEqual(result["ntpStratumThreshold"], 3)
+        self.assertEqual(result["ntpTimeOffsetThreshold"], 500)
+        self.assertEqual(result["ntpRootDispersionThreshold"], 250)
+
+    def test_ntp_thresholds_omitted_when_none(self):
+        """NTP threshold fields are omitted when not supplied (None)."""
+        result = self.build(
+            type=MonitorType.NTP,
+            name="NTP test",
+            hostname="pool.ntp.org",
+        )
+        self.assertNotIn("ntpStratumThreshold", result)
+        self.assertNotIn("ntpTimeOffsetThreshold", result)
+        self.assertNotIn("ntpRootDispersionThreshold", result)
+
+    def test_ntp_thresholds_not_emitted_for_other_types(self):
+        """NTP threshold fields are not emitted for non-NTP types even on 2.5."""
+        result = self.build(
+            type=MonitorType.HTTP,
+            name="test",
+            url="http://example.com",
+            ntpStratumThreshold=3,
+            ntpTimeOffsetThreshold=500,
+            ntpRootDispersionThreshold=250,
+        )
+        self.assertNotIn("ntpStratumThreshold", result)
+        self.assertNotIn("ntpTimeOffsetThreshold", result)
+        self.assertNotIn("ntpRootDispersionThreshold", result)
+
+    # ─── NTP supports ipFamily ────────────────────────────────────────
+
+    def test_ntp_supports_ip_family(self):
+        """NTP type accepts ipFamily on v2.5."""
+        result = self.build(
+            type=MonitorType.NTP,
+            name="NTP test",
+            hostname="pool.ntp.org",
+            ipFamily="IPv4",
+        )
+        self.assertEqual(result["ipFamily"], "IPv4")
+
+
+class TestOracleDBMonitorType(unittest.TestCase):
+    """Tests for OracleDB monitor type fields and version gating."""
+
+    def setUp(self):
+        self.api = MagicMock(spec=UptimeKumaApi)
+        self.api.version = "2.5.0"
+        self.api._parsed_version = UptimeKumaApi._parsed_version.__get__(self.api)
+        self.api._withheld_v2_fields = (
+            UptimeKumaApi._withheld_v2_fields.__get__(self.api)
+        )
+        self.api._warn_withheld_v2_fields = (
+            UptimeKumaApi._warn_withheld_v2_fields.__get__(self.api)
+        )
+        self.api._check_conditions_supported = (
+            UptimeKumaApi._check_conditions_supported.__get__(self.api)
+        )
+        self.api._check_monitor_type_supported = (
+            UptimeKumaApi._check_monitor_type_supported.__get__(self.api)
+        )
+        self.build = UptimeKumaApi._build_monitor_data.__get__(self.api)
+
+    def _build_at_version(self, version):
+        """Return a _build_monitor_data bound to a mock at the given version."""
+        api = MagicMock(spec=UptimeKumaApi)
+        api.version = version
+        api._parsed_version = UptimeKumaApi._parsed_version.__get__(api)
+        api._withheld_v2_fields = (
+            UptimeKumaApi._withheld_v2_fields.__get__(api)
+        )
+        api._warn_withheld_v2_fields = (
+            UptimeKumaApi._warn_withheld_v2_fields.__get__(api)
+        )
+        api._check_conditions_supported = (
+            UptimeKumaApi._check_conditions_supported.__get__(api)
+        )
+        api._check_monitor_type_supported = (
+            UptimeKumaApi._check_monitor_type_supported.__get__(api)
+        )
+        return UptimeKumaApi._build_monitor_data.__get__(api)
+
+    # ─── OracleDB accepted on v2.3+ ──────────────────────────────────
+
+    def test_oracledb_accepted_on_v2_3(self):
+        """OracleDB type is accepted on a 2.3 server."""
+        build = self._build_at_version("2.3.0")
+        result = build(
+            type=MonitorType.ORACLEDB,
+            name="Oracle test",
+            databaseConnectionString="localhost:1521/ORCL",
+        )
+        self.assertEqual(result["type"], MonitorType.ORACLEDB)
+        self.assertEqual(result["databaseConnectionString"], "localhost:1521/ORCL")
+
+    def test_oracledb_rejected_on_v1(self):
+        """OracleDB type raises on a pre-2.0 server."""
+        build = self._build_at_version("1.23.2")
+        with self.assertRaises(UptimeKumaException) as ctx:
+            build(
+                type=MonitorType.ORACLEDB,
+                name="t",
+                databaseConnectionString="localhost:1521/ORCL",
+            )
+        self.assertIn("oracledb", str(ctx.exception))
+        self.assertIn("2.3", str(ctx.exception))
+        self.assertIn("1.23.2", str(ctx.exception))
+
+    def test_oracledb_rejected_on_v2_2(self):
+        """OracleDB type raises on a 2.2 server (below 2.3 floor)."""
+        build = self._build_at_version("2.2.0")
+        with self.assertRaises(UptimeKumaException) as ctx:
+            build(
+                type=MonitorType.ORACLEDB,
+                name="t",
+                databaseConnectionString="localhost:1521/ORCL",
+            )
+        self.assertIn("oracledb", str(ctx.exception))
+        self.assertIn("2.3", str(ctx.exception))
+
+    def test_oracledb_includes_database_query(self):
+        """OracleDB type emits databaseQuery when supplied."""
+        result = self.build(
+            type=MonitorType.ORACLEDB,
+            name="Oracle test",
+            databaseConnectionString="localhost:1521/ORCL",
+            databaseQuery="SELECT 1 FROM DUAL",
+        )
+        self.assertEqual(result["databaseQuery"], "SELECT 1 FROM DUAL")
+
+    def test_oracledb_without_query(self):
+        """OracleDB type works without databaseQuery."""
+        result = self.build(
+            type=MonitorType.ORACLEDB,
+            name="Oracle test",
+            databaseConnectionString="localhost:1521/ORCL",
+        )
+        self.assertEqual(result["type"], MonitorType.ORACLEDB)
+
+
+class TestAuthMethodBearer(unittest.TestCase):
+    """Tests for AuthMethod.BEARER enum and bearer_token emission."""
+
+    def setUp(self):
+        self.api = MagicMock(spec=UptimeKumaApi)
+        self.api.version = "2.5.0"
+        self.api._parsed_version = UptimeKumaApi._parsed_version.__get__(self.api)
+        self.api._withheld_v2_fields = (
+            UptimeKumaApi._withheld_v2_fields.__get__(self.api)
+        )
+        self.api._warn_withheld_v2_fields = (
+            UptimeKumaApi._warn_withheld_v2_fields.__get__(self.api)
+        )
+        self.api._check_conditions_supported = (
+            UptimeKumaApi._check_conditions_supported.__get__(self.api)
+        )
+        self.api._check_monitor_type_supported = (
+            UptimeKumaApi._check_monitor_type_supported.__get__(self.api)
+        )
+        self.build = UptimeKumaApi._build_monitor_data.__get__(self.api)
+
+    def test_bearer_enum_value(self):
+        """AuthMethod.BEARER has the correct string value."""
+        self.assertEqual(AuthMethod.BEARER.value, "bearer")
+
+    def test_bearer_emits_bearer_token(self):
+        """AuthMethod.BEARER emits bearer_token in the payload."""
+        result = self.build(
+            type=MonitorType.HTTP,
+            name="test",
+            url="http://example.com",
+            authMethod=AuthMethod.BEARER,
+            bearer_token="my-secret-token",
+        )
+        self.assertEqual(result["authMethod"], AuthMethod.BEARER)
+        self.assertEqual(result["bearer_token"], "my-secret-token")
+
+    def test_bearer_does_not_emit_basic_auth_fields(self):
+        """AuthMethod.BEARER does not emit basic_auth_user/pass."""
+        result = self.build(
+            type=MonitorType.HTTP,
+            name="test",
+            url="http://example.com",
+            authMethod=AuthMethod.BEARER,
+            bearer_token="tok",
+        )
+        self.assertNotIn("basic_auth_user", result)
+        self.assertNotIn("basic_auth_pass", result)
+
+    def test_bearer_does_not_emit_oauth_fields(self):
+        """AuthMethod.BEARER does not emit OAuth2 fields."""
+        result = self.build(
+            type=MonitorType.HTTP,
+            name="test",
+            url="http://example.com",
+            authMethod=AuthMethod.BEARER,
+            bearer_token="tok",
+        )
+        self.assertNotIn("oauth_token_url", result)
+        self.assertNotIn("oauth_client_id", result)
 
 
 if __name__ == "__main__":
