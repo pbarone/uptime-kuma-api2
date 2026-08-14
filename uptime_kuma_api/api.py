@@ -78,6 +78,10 @@ _V2_ONLY_MONITOR_TYPES = {
     MonitorType.GLOBALPING: "2.1",
     # louislam/uptime-kuma 2.1.0-beta.2; absent at 2.1.0-beta.1.
     MonitorType.SIP_OPTIONS: "2.1",
+    # louislam/uptime-kuma#7156, milestone 2.3.0.
+    MonitorType.ORACLEDB: "2.3",
+    # louislam/uptime-kuma#7214, milestone 2.5.0.
+    MonitorType.NTP: "2.5",
 }
 
 
@@ -107,6 +111,7 @@ _IP_FAMILY_TYPES = frozenset({
     MonitorType.STEAM, MonitorType.MQTT, MonitorType.RADIUS,
     MonitorType.TAILSCALE_PING, MonitorType.GRPC_KEYWORD,
     MonitorType.SNMP, MonitorType.SMTP, MonitorType.RABBITMQ,
+    MonitorType.NTP,
 })
 
 # The monitor types that accept the v2-only HTTP fields.
@@ -162,6 +167,10 @@ _V2_ONLY_MONITOR_FIELDS = {
     "ping_per_request_timeout": _FieldRule("2.0", frozenset({MonitorType.PING}), _WITHHOLD),
     "mqttWebsocketPath": _FieldRule("2.0", frozenset({MonitorType.MQTT}), _WITHHOLD),
     "mqttCheckType": _FieldRule("2.0", frozenset({MonitorType.MQTT}), _WITHHOLD),
+
+    "ntpStratumThreshold": _FieldRule("2.5", frozenset({MonitorType.NTP}), _WITHHOLD),
+    "ntpTimeOffsetThreshold": _FieldRule("2.5", frozenset({MonitorType.NTP}), _WITHHOLD),
+    "ntpRootDispersionThreshold": _FieldRule("2.5", frozenset({MonitorType.NTP}), _WITHHOLD),
 }
 
 
@@ -430,6 +439,8 @@ def _check_arguments_monitor(kwargs) -> None:
         MonitorType.SNMP: ["hostname", "snmpOid"],
         MonitorType.SMTP: ["hostname"],
         MonitorType.SYSTEM_SERVICE: ["system_service_name"],
+        MonitorType.NTP: ["hostname"],
+        MonitorType.ORACLEDB: ["databaseConnectionString"],
     }
     type_ = kwargs["type"]
     required_args = required_args_by_type[type_]
@@ -1295,6 +1306,11 @@ class UptimeKumaApi(object):
 
             # SYSTEM_SERVICE
             system_service_name: str = None,
+
+            # NTP
+            ntpStratumThreshold: int = None,
+            ntpTimeOffsetThreshold: int = None,
+            ntpRootDispersionThreshold: int = None,
     ) -> dict:
         if accepted_statuscodes is None:
             accepted_statuscodes = ["200-299"]
@@ -1400,6 +1416,11 @@ class UptimeKumaApi(object):
                 "oauth_scopes": oauth_scopes,
             })
 
+        if authMethod == AuthMethod.BEARER:
+            data.update({
+                "bearer_token": bearer_token,
+            })
+
         # GRPC_KEYWORD
         if type == MonitorType.GRPC_KEYWORD:
             data.update({
@@ -1432,6 +1453,8 @@ class UptimeKumaApi(object):
                 port = 161
             elif type == MonitorType.SMTP:
                 port = 25
+            elif type == MonitorType.NTP:
+                port = 123
         data.update({
             "port": port,
         })
@@ -1455,8 +1478,9 @@ class UptimeKumaApi(object):
             "databaseConnectionString": databaseConnectionString
         })
 
-        # SQLSERVER, POSTGRES, MYSQL
-        if type in [MonitorType.SQLSERVER, MonitorType.POSTGRES, MonitorType.MYSQL]:
+        # SQLSERVER, POSTGRES, MYSQL, ORACLEDB
+        if type in [MonitorType.SQLSERVER, MonitorType.POSTGRES, MonitorType.MYSQL,
+                    MonitorType.ORACLEDB]:
             data.update({
                 "databaseQuery": databaseQuery,
             })
