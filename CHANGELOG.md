@@ -1,7 +1,33 @@
 ## Changelog
-### Unreleased
+### Release 2.6.0
+A feature release adding new monitor types, notification providers, and custom
+SSL certificate support. Non-breaking on every final release in the supported
+1.21.3 through Uptime Kuma 2.5.0 range.
+
 #### Features
-- `ssl_verify` now accepts a path (`str` or `os.PathLike`) to a CA bundle file for custom certificate verification in addition to `True`/`False`. Contributed by @Firq-ow. Fixes [#32](https://github.com/pbarone/uptime-kuma-api2/issues/32)
+- **NTP monitor type** (server 2.5.0+): queries NTP servers via UDP, checks
+  stratum/offset/dispersion against configurable thresholds. Fields: `hostname`,
+  `port` (default 123), `ntpStratumThreshold`, `ntpTimeOffsetThreshold`,
+  `ntpRootDispersionThreshold`. Closes [#46](https://github.com/pbarone/uptime-kuma-api2/issues/46).
+- **OracleDB monitor type** (server 2.3.0+): Oracle database connectivity
+  monitor. Reuses existing `databaseConnectionString`, `databaseQuery` fields.
+  Closes [#46](https://github.com/pbarone/uptime-kuma-api2/issues/46).
+- **AuthMethod.BEARER** enum value: the server added bearer token auth in 2.4.0;
+  the `bearer_token` field was already gated but the enum value was missing.
+  Closes [#46](https://github.com/pbarone/uptime-kuma-api2/issues/46).
+- **9 new notification providers** from Uptime Kuma 2.3.0-2.5.0: Plivo (SMS +
+  Voice Call), Ooredoo (Maldives) SMS, WxPusher, Flowtriq, EgoSMS (Uganda),
+  VK Teams, Telnyx, VK, MAX messenger. Closes
+  [#47](https://github.com/pbarone/uptime-kuma-api2/issues/47).
+- **SMTP `smtpAdditionalHeaders`** field: custom email headers as a JSON string.
+  Closes [#47](https://github.com/pbarone/uptime-kuma-api2/issues/47).
+- **`ssl_verify` accepts a CA bundle path** (`str` or `os.PathLike`) for custom
+  certificate verification, in addition to `True`/`False`. Contributed by
+  @Firq-ow. Fixes [#32](https://github.com/pbarone/uptime-kuma-api2/issues/32).
+
+#### Packaging
+- `python-engineio>=4.0.1` is now an explicit dependency floor, ensuring the
+  custom CA mechanism (`http_session.verify`) is available.
 
 ### Release 2.5.0
 A feature release, and non-breaking on every final release in the supported
