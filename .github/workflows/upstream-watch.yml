@@ -24,7 +24,6 @@ jobs:
 
       - name: Check upstream coverage
         id: coverage
-        continue-on-error: true
         run: python scripts/check_upstream_coverage.py
 
       - name: Open issue if gaps found
