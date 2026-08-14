@@ -1,4 +1,18 @@
 ## Changelog
+### Unreleased
+
+#### Features
+- **PM2 monitor type** (server 2.5.0+): checks if a PM2 process is online.
+  Reuses the existing `system_service_name` field. Closes
+  [#55](https://github.com/pbarone/uptime-kuma-api2/issues/55).
+- **34 new notification providers** from Uptime Kuma 2.5.0: Bale, Bitrix24,
+  CallMeBot, Cellsynt, 46elks, Fluxer, Google Sheets, Grafana OnCall,
+  GTX Messaging, HaloPSA, Heii On-Call, Jira Service Management, Keep,
+  Notifery, OneChat, Onesender, Pumble, PushPlus, Resend, SendGrid, SevenIO,
+  SIGNL4, SMS.ir, SMSPartner, SMSPlanet, SpugPush, Teltonika, Threema, WAHA,
+  Web Push, Whapi, 360messenger (WhatsApp), WPush, YZJ. Closes
+  [#55](https://github.com/pbarone/uptime-kuma-api2/issues/55).
+
 ### Release 2.6.0
 A feature release adding new monitor types, notification providers, and custom
 SSL certificate support. Non-breaking on every final release in the supported

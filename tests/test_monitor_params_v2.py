@@ -3920,6 +3920,7 @@ class TestPerTypeVersionFloors(unittest.TestCase):
                 MonitorType.SIP_OPTIONS: "2.1",
                 MonitorType.ORACLEDB: "2.3",
                 MonitorType.NTP: "2.5",
+                MonitorType.PM2: "2.5",
             },
         )
 
