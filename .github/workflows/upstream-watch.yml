@@ -1,0 +1,67 @@
+name: Upstream coverage check
+
+on:
+  schedule:
+    # Every Monday at 09:00 UTC
+    - cron: '0 9 * * 1'
+  workflow_dispatch: # Allow manual trigger
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install packaging
+
+      - name: Check upstream coverage
+        id: coverage
+        run: python scripts/check_upstream_coverage.py
+
+      - name: Open issue if gaps found
+        if: failure() && steps.coverage.outputs.has_gaps == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TITLE="upstream: coverage gaps detected (Uptime Kuma ${{ steps.coverage.outputs.upstream_version }})"
+
+          # Check if an open upstream-coverage issue already exists (avoid duplicates)
+          EXISTING=$(gh issue list --state open --label "upstream-watch" --json number --jq '.[0].number // empty')
+          if [ -n "$EXISTING" ]; then
+            echo "Issue #$EXISTING already open, skipping."
+            exit 0
+          fi
+
+          BODY="The weekly upstream scan found Uptime Kuma \`${{ steps.coverage.outputs.upstream_version }}\` has additions that this library does not yet cover."
+          BODY="$BODY"$'\n\n'
+
+          if [ -n "${{ steps.coverage.outputs.missing_notifications }}" ]; then
+            BODY="$BODY### Missing notification providers"$'\n'
+            IFS=',' read -ra ITEMS <<< "${{ steps.coverage.outputs.missing_notifications }}"
+            for item in "${ITEMS[@]}"; do
+              BODY="$BODY- \`$(echo $item | xargs)\`"$'\n'
+            done
+            BODY="$BODY"$'\n'
+          fi
+
+          if [ -n "${{ steps.coverage.outputs.missing_monitors }}" ]; then
+            BODY="$BODY### Missing monitor types"$'\n'
+            IFS=',' read -ra ITEMS <<< "${{ steps.coverage.outputs.missing_monitors }}"
+            for item in "${ITEMS[@]}"; do
+              BODY="$BODY- \`$(echo $item | xargs)\`"$'\n'
+            done
+            BODY="$BODY"$'\n'
+          fi
+
+          BODY="$BODY---"$'\n'
+          BODY="${BODY}Opened automatically by the [upstream coverage check](https://github.com/${{ github.repository }}/actions/workflows/upstream-watch.yml) workflow."
+
+          gh issue create --title "$TITLE" --body "$BODY" --label "enhancement" --label "upstream-watch"
