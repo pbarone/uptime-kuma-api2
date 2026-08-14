@@ -172,6 +172,33 @@ class NotificationType(str, Enum):
     ZOHOCLIQ = "ZohoCliq"
     """ZohoCliq"""
 
+    EGOSMS = "egosms"
+    """EgoSMS"""
+
+    FLOWTRIQ = "Flowtriq"
+    """Flowtriq"""
+
+    MAX = "max"
+    """MAX Messenger"""
+
+    OOREDOO = "Ooredoo"
+    """Ooredoo (Maldives) SMS"""
+
+    PLIVO = "plivo"
+    """Plivo"""
+
+    TELNYX = "telnyx"
+    """Telnyx"""
+
+    VK = "VK"
+    """VK"""
+
+    VKTEAMS = "VKTeams"
+    """VK Teams"""
+
+    WXPUSHER = "WxPusher"
+    """WxPusher"""
+
 
 notification_provider_options = {
     NotificationType.ALERTA: dict(
@@ -442,6 +469,7 @@ notification_provider_options = {
         smtpCC=dict(type="str", required=False),
         smtpBCC=dict(type="str", required=False),
         smtpTo=dict(type="str", required=False),
+        smtpAdditionalHeaders=dict(type="str", required=False),
     ),
     NotificationType.SPLUNK: dict(
         splunkAutoResolve=dict(type="str", required=False),
@@ -485,6 +513,62 @@ notification_provider_options = {
     ),
     NotificationType.ZOHOCLIQ: dict(
         webhookUrl=dict(type="str", required=True),
+    ),
+    NotificationType.EGOSMS: dict(
+        egosmsUsername=dict(type="str", required=True),
+        egosmsPassword=dict(type="str", required=True),
+        egosmsPhoneNumber=dict(type="str", required=True),
+        egosmsSender=dict(type="str", required=False),
+    ),
+    NotificationType.FLOWTRIQ: dict(
+        flowtriqWebhookUrl=dict(type="str", required=True),
+        flowtriqApiKey=dict(type="str", required=False),
+    ),
+    NotificationType.MAX: dict(
+        maxBotToken=dict(type="str", required=True),
+        maxChatID=dict(type="str", required=True),
+        maxApiUrl=dict(type="str", required=False),
+        maxUseTemplate=dict(type="bool", required=False),
+        maxTemplate=dict(type="str", required=False),
+        maxTemplateFormat=dict(type="str", required=False),
+    ),
+    NotificationType.OOREDOO: dict(
+        ooredooBearerToken=dict(type="str", required=True),
+        ooredooUsername=dict(type="str", required=True),
+        ooredooAccessKey=dict(type="str", required=True),
+        ooredooToNumber=dict(type="str", required=True),
+        ooredooServerUrl=dict(type="str", required=False),
+    ),
+    NotificationType.PLIVO: dict(
+        plivoAuthID=dict(type="str", required=True),
+        plivoAuthToken=dict(type="str", required=True),
+        plivoFromNumber=dict(type="str", required=True),
+        plivoToNumber=dict(type="str", required=True),
+        plivoMessageType=dict(type="str", required=False),
+        plivoAnswerUrl=dict(type="str", required=False),
+    ),
+    NotificationType.TELNYX: dict(
+        telnyxApiKey=dict(type="str", required=True),
+        telnyxPhoneNumber=dict(type="str", required=True),
+        telnyxToNumber=dict(type="str", required=True),
+        telnyxMessagingProfileId=dict(type="str", required=False),
+    ),
+    NotificationType.VK: dict(
+        vkAccessToken=dict(type="str", required=True),
+        vkApiVersion=dict(type="str", required=True),
+        vkPeerId=dict(type="str", required=True),
+        vkDontParseLinks=dict(type="bool", required=False),
+    ),
+    NotificationType.VKTEAMS: dict(
+        vkteamsBotToken=dict(type="str", required=True),
+        vkteamsChatId=dict(type="str", required=True),
+        vkteamsBaseUrl=dict(type="str", required=False),
+        vkteamsUseTemplate=dict(type="bool", required=False),
+        vkteamsTemplate=dict(type="str", required=False),
+        vkteamsTemplateFormat=dict(type="str", required=False),
+    ),
+    NotificationType.WXPUSHER: dict(
+        wxpusherSPT=dict(type="str", required=True),
     ),
 }
 
