@@ -46,8 +46,11 @@ def extract_names_from_js(directory, pattern=r'name\s*=\s*["\']([^"\']+)["\']'):
         with open(filepath, encoding="utf-8", errors="replace") as f:
             content = f.read()
 
-        # Prefer `type = "..."` (wire value) if present
-        type_match = re.search(r'\btype\s*=\s*["\']([^"\']+)["\']', content)
+        # Prefer `type = "..."` (wire value) if present.
+        # The regex requires `type` at the start of a line (after optional
+        # whitespace) to avoid matching inside SQL strings like
+        # `WHERE type = 'certificate'` in globalping.js.
+        type_match = re.search(r'^\s*type\s*=\s*["\']([^"\']+)["\']', content, re.MULTILINE)
         if type_match:
             names.add(type_match.group(1))
             continue
