@@ -1,4 +1,8 @@
 ## Changelog
+### Unreleased
+#### Features
+- `ssl_verify` now accepts a path (`str` or `os.PathLike`) to a CA bundle file for custom certificate verification in addition to `True`/`False`. Contributed by @Firq-ow. Fixes [#32](https://github.com/pbarone/uptime-kuma-api2/issues/32)
+
 ### Release 2.5.0
 A feature release, and non-breaking on every final release in the supported
 1.21.3 through Uptime Kuma 2.5.0 range: a call that succeeds against 2.4.0 still

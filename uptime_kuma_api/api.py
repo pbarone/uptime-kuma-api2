@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import datetime
 import json
+import os
 import random
 import string
 import time
@@ -9,7 +10,7 @@ import warnings
 from collections import namedtuple
 from contextlib import contextmanager
 from copy import deepcopy
-from typing import Any
+from typing import Any, Union
 
 import requests
 import socketio
@@ -606,9 +607,12 @@ class UptimeKumaApi(object):
     :param float timeout: How many seconds the client should wait for the connection, an expected event or a server
                           response. Default is ``10``.
     :param dict headers: Headers that are passed to the socketio connection, defaults to None
-    :param bool ssl_verify: ``True`` to verify SSL certificates, or ``False`` to skip SSL certificate
-                            verification, allowing connections to servers with self signed certificates.
-                            Default is ``True``.
+    :param ssl_verify: ``True`` to verify SSL certificates using system CAs, ``False`` to skip SSL
+                       certificate verification, allowing connections to servers with self signed
+                       certificates, or a path (``str`` or ``os.PathLike``) to a CA bundle file to verify
+                       against a custom CA. The path must point to a file, not a directory. Default is
+                       ``True``.
+    :type ssl_verify: bool | str | os.PathLike
     :param float wait_events: How many seconds the client should wait for the next event of the same type.
                               There is no way to determine when the last message of a certain type has arrived.
                               Therefore, a timeout is required. If no further message has arrived within this time,
@@ -620,7 +624,7 @@ class UptimeKumaApi(object):
             url: str,
             timeout: float = 10,
             headers: dict = None,
-            ssl_verify: bool = True,
+            ssl_verify: Union[bool, str, os.PathLike] = True,
             wait_events: float = 0.2,
             logger=None,
     ) -> None:
@@ -633,9 +637,25 @@ class UptimeKumaApi(object):
         self.timeout = timeout
         self.headers = headers
         self.wait_events = wait_events
+
+        # Normalize ssl_verify once so every consumer (socketio http_session,
+        # get_status_page's requests.get) sees the same str
+        if isinstance(ssl_verify, (str, os.PathLike)):
+            ssl_verify = os.fspath(ssl_verify)
+            # Safeguard in case the provided path isn't a file or doesn't exist
+            if not os.path.isfile(ssl_verify):
+                raise ValueError(f"ssl_verify path is not a file: {ssl_verify!r}")
         self.ssl_verify = ssl_verify
 
         sio_kwargs = {"ssl_verify": ssl_verify}
+        if isinstance(ssl_verify, str):
+            # engineio only reads a custom CA off http_session.verify; passing
+            # a path as ssl_verify above is silently ignored (it's just truthy).
+            # Solution: using a requests.Session with .verify set to the cert
+            _http = requests.Session()
+            _http.verify = ssl_verify
+            sio_kwargs["http_session"] = _http
+
         if logger is not None:
             sio_kwargs["logger"] = logger
         self.sio = socketio.Client(**sio_kwargs)
