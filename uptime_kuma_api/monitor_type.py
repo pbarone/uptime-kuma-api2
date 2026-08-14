@@ -93,3 +93,9 @@ class MonitorType(str, Enum):
 
     SIP_OPTIONS = "sip-options"
     """SIP Options Ping"""
+
+    NTP = "ntp"
+    """NTP"""
+
+    ORACLEDB = "oracledb"
+    """Oracle Database"""

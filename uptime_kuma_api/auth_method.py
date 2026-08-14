@@ -18,3 +18,6 @@ class AuthMethod(str, Enum):
 
     OAUTH2_CC = "oauth2-cc"
     """OAuth2: Client Credentials"""
+
+    BEARER = "bearer"
+    """Bearer Token Authentication."""

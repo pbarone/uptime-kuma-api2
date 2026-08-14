@@ -481,6 +481,20 @@ class MonitorBuilder:
         self._data["system_service_name"] = value
         return self
 
+    # ── NTP ──────────────────────────────────────────────────────────────
+
+    def ntpStratumThreshold(self, value: int) -> "MonitorBuilder":
+        self._data["ntpStratumThreshold"] = value
+        return self
+
+    def ntpTimeOffsetThreshold(self, value: int) -> "MonitorBuilder":
+        self._data["ntpTimeOffsetThreshold"] = value
+        return self
+
+    def ntpRootDispersionThreshold(self, value: int) -> "MonitorBuilder":
+        self._data["ntpRootDispersionThreshold"] = value
+        return self
+
     # ── Build ────────────────────────────────────────────────────────────
 
     def build(self) -> dict:
