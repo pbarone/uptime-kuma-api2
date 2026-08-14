@@ -559,5 +559,320 @@ class TestBugFPreservation(unittest.TestCase):
         self.assertEqual(required, ["smtpFrom", "smtpHost", "smtpPort"])
 
 
+class TestNewNotificationProviders(unittest.TestCase):
+    """Unit tests for notification providers added in Uptime Kuma 2.3.0-2.5.0."""
+
+    # ─── Plivo ────────────────────────────────────────────────────────────
+
+    def test_plivo_valid(self):
+        """Plivo: all required fields pass validation."""
+        data = _build_notification_data(
+            name="test",
+            type=NotificationType.PLIVO,
+            plivoAuthID="AUTH123",
+            plivoAuthToken="TOKEN456",
+            plivoFromNumber="+15551234567",
+            plivoToNumber="+15559876543",
+        )
+        assert data["type"] == NotificationType.PLIVO
+        assert data["plivoAuthID"] == "AUTH123"
+        assert data["plivoToNumber"] == "+15559876543"
+        _check_arguments_notification(data)
+
+    def test_plivo_missing_auth_id(self):
+        """Plivo: missing plivoAuthID raises."""
+        data = _build_notification_data(
+            name="test",
+            type=NotificationType.PLIVO,
+            plivoAuthToken="TOKEN456",
+            plivoFromNumber="+15551234567",
+            plivoToNumber="+15559876543",
+        )
+        with self.assertRaises(TypeError):
+            _check_arguments_notification(data)
+
+    def test_plivo_optional_fields(self):
+        """Plivo: optional fields (messageType, answerUrl) are included."""
+        data = _build_notification_data(
+            name="test",
+            type=NotificationType.PLIVO,
+            plivoAuthID="AUTH123",
+            plivoAuthToken="TOKEN456",
+            plivoFromNumber="+15551234567",
+            plivoToNumber="+15559876543",
+            plivoMessageType="call",
+            plivoAnswerUrl="http://example.com/answer.xml",
+        )
+        assert data["plivoMessageType"] == "call"
+        assert data["plivoAnswerUrl"] == "http://example.com/answer.xml"
+        _check_arguments_notification(data)
+
+    # ─── Ooredoo ──────────────────────────────────────────────────────────
+
+    def test_ooredoo_valid(self):
+        """Ooredoo: all required fields pass validation."""
+        data = _build_notification_data(
+            name="test",
+            type=NotificationType.OOREDOO,
+            ooredooBearerToken="bearer-abc",
+            ooredooUsername="user1",
+            ooredooAccessKey="key123",
+            ooredooToNumber="9607654321",
+        )
+        assert data["type"] == NotificationType.OOREDOO
+        assert data["ooredooUsername"] == "user1"
+        _check_arguments_notification(data)
+
+    def test_ooredoo_missing_bearer_token(self):
+        """Ooredoo: missing ooredooBearerToken raises."""
+        data = _build_notification_data(
+            name="test",
+            type=NotificationType.OOREDOO,
+            ooredooUsername="user1",
+            ooredooAccessKey="key123",
+            ooredooToNumber="9607654321",
+        )
+        with self.assertRaises(TypeError):
+            _check_arguments_notification(data)
+
+    # ─── WxPusher ─────────────────────────────────────────────────────────
+
+    def test_wxpusher_valid(self):
+        """WxPusher: required wxpusherSPT passes validation."""
+        data = _build_notification_data(
+            name="test",
+            type=NotificationType.WXPUSHER,
+            wxpusherSPT="SPT_abc123",
+        )
+        assert data["type"] == NotificationType.WXPUSHER
+        assert data["wxpusherSPT"] == "SPT_abc123"
+        _check_arguments_notification(data)
+
+    def test_wxpusher_missing_spt(self):
+        """WxPusher: missing wxpusherSPT raises."""
+        data = _build_notification_data(
+            name="test",
+            type=NotificationType.WXPUSHER,
+        )
+        with self.assertRaises(TypeError):
+            _check_arguments_notification(data)
+
+    # ─── Flowtriq ─────────────────────────────────────────────────────────
+
+    def test_flowtriq_valid(self):
+        """Flowtriq: required webhookUrl passes validation."""
+        data = _build_notification_data(
+            name="test",
+            type=NotificationType.FLOWTRIQ,
+            flowtriqWebhookUrl="https://flowtriq.example.com/webhook",
+        )
+        assert data["type"] == NotificationType.FLOWTRIQ
+        assert data["flowtriqWebhookUrl"] == "https://flowtriq.example.com/webhook"
+        _check_arguments_notification(data)
+
+    def test_flowtriq_missing_webhook_url(self):
+        """Flowtriq: missing flowtriqWebhookUrl raises."""
+        data = _build_notification_data(
+            name="test",
+            type=NotificationType.FLOWTRIQ,
+            flowtriqApiKey="optional-key",
+        )
+        with self.assertRaises(TypeError):
+            _check_arguments_notification(data)
+
+    def test_flowtriq_with_api_key(self):
+        """Flowtriq: optional flowtriqApiKey is included."""
+        data = _build_notification_data(
+            name="test",
+            type=NotificationType.FLOWTRIQ,
+            flowtriqWebhookUrl="https://flowtriq.example.com/webhook",
+            flowtriqApiKey="my-api-key",
+        )
+        assert data["flowtriqApiKey"] == "my-api-key"
+        _check_arguments_notification(data)
+
+    # ─── EgoSMS ───────────────────────────────────────────────────────────
+
+    def test_egosms_valid(self):
+        """EgoSMS: all required fields pass validation."""
+        data = _build_notification_data(
+            name="test",
+            type=NotificationType.EGOSMS,
+            egosmsUsername="user",
+            egosmsPassword="pass",
+            egosmsPhoneNumber="+256700000000",
+        )
+        assert data["type"] == NotificationType.EGOSMS
+        assert data["egosmsPhoneNumber"] == "+256700000000"
+        _check_arguments_notification(data)
+
+    def test_egosms_missing_username(self):
+        """EgoSMS: missing egosmsUsername raises."""
+        data = _build_notification_data(
+            name="test",
+            type=NotificationType.EGOSMS,
+            egosmsPassword="pass",
+            egosmsPhoneNumber="+256700000000",
+        )
+        with self.assertRaises(TypeError):
+            _check_arguments_notification(data)
+
+    # ─── VK Teams ─────────────────────────────────────────────────────────
+
+    def test_vkteams_valid(self):
+        """VK Teams: all required fields pass validation."""
+        data = _build_notification_data(
+            name="test",
+            type=NotificationType.VKTEAMS,
+            vkteamsBotToken="bot-token-123",
+            vkteamsChatId="chat-456",
+        )
+        assert data["type"] == NotificationType.VKTEAMS
+        assert data["vkteamsBotToken"] == "bot-token-123"
+        _check_arguments_notification(data)
+
+    def test_vkteams_missing_bot_token(self):
+        """VK Teams: missing vkteamsBotToken raises."""
+        data = _build_notification_data(
+            name="test",
+            type=NotificationType.VKTEAMS,
+            vkteamsChatId="chat-456",
+        )
+        with self.assertRaises(TypeError):
+            _check_arguments_notification(data)
+
+    def test_vkteams_optional_fields(self):
+        """VK Teams: optional template fields are included."""
+        data = _build_notification_data(
+            name="test",
+            type=NotificationType.VKTEAMS,
+            vkteamsBotToken="bot-token-123",
+            vkteamsChatId="chat-456",
+            vkteamsBaseUrl="https://myteam.example.com",
+            vkteamsUseTemplate=True,
+            vkteamsTemplate="{{NAME}} is {{STATUS}}",
+            vkteamsTemplateFormat="HTML",
+        )
+        assert data["vkteamsBaseUrl"] == "https://myteam.example.com"
+        assert data["vkteamsUseTemplate"] is True
+        _check_arguments_notification(data)
+
+    # ─── Telnyx ───────────────────────────────────────────────────────────
+
+    def test_telnyx_valid(self):
+        """Telnyx: all required fields pass validation."""
+        data = _build_notification_data(
+            name="test",
+            type=NotificationType.TELNYX,
+            telnyxApiKey="KEY_abc",
+            telnyxPhoneNumber="+15551234567",
+            telnyxToNumber="+15559876543",
+        )
+        assert data["type"] == NotificationType.TELNYX
+        assert data["telnyxApiKey"] == "KEY_abc"
+        _check_arguments_notification(data)
+
+    def test_telnyx_missing_api_key(self):
+        """Telnyx: missing telnyxApiKey raises."""
+        data = _build_notification_data(
+            name="test",
+            type=NotificationType.TELNYX,
+            telnyxPhoneNumber="+15551234567",
+            telnyxToNumber="+15559876543",
+        )
+        with self.assertRaises(TypeError):
+            _check_arguments_notification(data)
+
+    # ─── VK ───────────────────────────────────────────────────────────────
+
+    def test_vk_valid(self):
+        """VK: all required fields pass validation."""
+        data = _build_notification_data(
+            name="test",
+            type=NotificationType.VK,
+            vkAccessToken="vk1.token",
+            vkApiVersion="5.199",
+            vkPeerId="12345678",
+        )
+        assert data["type"] == NotificationType.VK
+        assert data["vkAccessToken"] == "vk1.token"
+        assert data["vkApiVersion"] == "5.199"
+        _check_arguments_notification(data)
+
+    def test_vk_missing_access_token(self):
+        """VK: missing vkAccessToken raises."""
+        data = _build_notification_data(
+            name="test",
+            type=NotificationType.VK,
+            vkApiVersion="5.199",
+            vkPeerId="12345678",
+        )
+        with self.assertRaises(TypeError):
+            _check_arguments_notification(data)
+
+    # ─── MAX ──────────────────────────────────────────────────────────────
+
+    def test_max_valid(self):
+        """MAX: all required fields pass validation."""
+        data = _build_notification_data(
+            name="test",
+            type=NotificationType.MAX,
+            maxBotToken="bot-token",
+            maxChatID="chat-id",
+        )
+        assert data["type"] == NotificationType.MAX
+        assert data["maxBotToken"] == "bot-token"
+        assert data["maxChatID"] == "chat-id"
+        _check_arguments_notification(data)
+
+    def test_max_missing_bot_token(self):
+        """MAX: missing maxBotToken raises."""
+        data = _build_notification_data(
+            name="test",
+            type=NotificationType.MAX,
+            maxChatID="chat-id",
+        )
+        with self.assertRaises(TypeError):
+            _check_arguments_notification(data)
+
+    def test_max_optional_fields(self):
+        """MAX: optional template fields are included."""
+        data = _build_notification_data(
+            name="test",
+            type=NotificationType.MAX,
+            maxBotToken="bot-token",
+            maxChatID="chat-id",
+            maxApiUrl="https://platform-api.max.ru",
+            maxUseTemplate=True,
+            maxTemplate="{{NAME}} is {{STATUS}}",
+            maxTemplateFormat="HTML",
+        )
+        assert data["maxApiUrl"] == "https://platform-api.max.ru"
+        assert data["maxUseTemplate"] is True
+        _check_arguments_notification(data)
+
+    # ─── SMTP smtpAdditionalHeaders ───────────────────────────────────────
+
+    def test_smtp_additional_headers_in_options(self):
+        """SMTP: smtpAdditionalHeaders is declared in options."""
+        smtp_options = notification_provider_options[NotificationType.SMTP]
+        self.assertIn("smtpAdditionalHeaders", smtp_options)
+        self.assertEqual(smtp_options["smtpAdditionalHeaders"]["type"], "str")
+        self.assertFalse(smtp_options["smtpAdditionalHeaders"]["required"])
+
+    def test_smtp_additional_headers_included(self):
+        """SMTP: smtpAdditionalHeaders is included in notification data."""
+        data = _build_notification_data(
+            name="test",
+            type=NotificationType.SMTP,
+            smtpHost="mail.example.com",
+            smtpPort=587,
+            smtpFrom="test@example.com",
+            smtpAdditionalHeaders='{"X-Custom": "value"}',
+        )
+        assert data["smtpAdditionalHeaders"] == '{"X-Custom": "value"}'
+        _check_arguments_notification(data)
+
+
 if __name__ == "__main__":
     unittest.main()
