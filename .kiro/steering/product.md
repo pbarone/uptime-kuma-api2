@@ -1,3 +1,7 @@
+---
+inclusion: always
+---
+
 # Product
 
 `uptime-kuma-api2` is a Python wrapper for the [Uptime Kuma](https://github.com/louislam/uptime-kuma)
