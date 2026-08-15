@@ -99,3 +99,6 @@ class MonitorType(str, Enum):
 
     ORACLEDB = "oracledb"
     """Oracle Database"""
+
+    PM2 = "pm2"
+    """PM2 Process"""

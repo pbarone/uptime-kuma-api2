@@ -199,6 +199,108 @@ class NotificationType(str, Enum):
     WXPUSHER = "WxPusher"
     """WxPusher"""
 
+    BALE = "bale"
+    """Bale"""
+
+    BITRIX24 = "Bitrix24"
+    """Bitrix24"""
+
+    CALLMEBOT = "CallMeBot"
+    """CallMeBot"""
+
+    CELLSYNT = "Cellsynt"
+    """Cellsynt"""
+
+    ELKS = "Elks"
+    """46elks"""
+
+    FLUXER = "fluxer"
+    """Fluxer"""
+
+    GOOGLESHEETS = "GoogleSheets"
+    """Google Sheets"""
+
+    GRAFANAONCALL = "GrafanaOncall"
+    """Grafana OnCall"""
+
+    GTXMESSAGING = "gtxmessaging"
+    """GTX Messaging"""
+
+    HALOPSA = "HaloPSA"
+    """HaloPSA"""
+
+    HEIIONCALL = "HeiiOnCall"
+    """Heii On-Call"""
+
+    JIRASERVICEMANAGEMENT = "JiraServiceManagement"
+    """Jira Service Management"""
+
+    KEEP = "Keep"
+    """Keep"""
+
+    NOTIFERY = "notifery"
+    """Notifery"""
+
+    ONECHAT = "OneChat"
+    """OneChat"""
+
+    ONESENDER = "Onesender"
+    """Onesender"""
+
+    PUMBLE = "pumble"
+    """Pumble"""
+
+    PUSHPLUS = "PushPlus"
+    """PushPlus"""
+
+    RESEND = "Resend"
+    """Resend"""
+
+    SENDGRID = "SendGrid"
+    """SendGrid"""
+
+    SEVENIO = "SevenIO"
+    """SevenIO"""
+
+    SIGNL4 = "SIGNL4"
+    """SIGNL4"""
+
+    SMSIR = "smsir"
+    """SMS.ir"""
+
+    SMSPARTNER = "SMSPartner"
+    """SMSPartner"""
+
+    SMSPLANET = "SMSPlanet"
+    """SMSPlanet"""
+
+    SPUGPUSH = "SpugPush"
+    """SpugPush"""
+
+    TELTONIKA = "Teltonika"
+    """Teltonika"""
+
+    THREEMA = "threema"
+    """Threema"""
+
+    WAHA = "waha"
+    """WAHA"""
+
+    WEBPUSH = "Webpush"
+    """Web Push"""
+
+    WHAPI = "whapi"
+    """Whapi"""
+
+    WHATSAPP360MESSENGER = "Whatsapp360messenger"
+    """360messenger (WhatsApp)"""
+
+    WPUSH = "WPush"
+    """WPush"""
+
+    YZJ = "YZJ"
+    """YZJ"""
+
 
 notification_provider_options = {
     NotificationType.ALERTA: dict(
@@ -569,6 +671,176 @@ notification_provider_options = {
     ),
     NotificationType.WXPUSHER: dict(
         wxpusherSPT=dict(type="str", required=True),
+    ),
+    NotificationType.BALE: dict(
+        baleBotToken=dict(type="str", required=True),
+        baleChatID=dict(type="str", required=True),
+    ),
+    NotificationType.BITRIX24: dict(
+        bitrix24WebhookURL=dict(type="str", required=True),
+        bitrix24UserID=dict(type="str", required=True),
+    ),
+    NotificationType.CALLMEBOT: dict(
+        callMeBotEndpoint=dict(type="str", required=True),
+    ),
+    NotificationType.CELLSYNT: dict(
+        cellsyntLogin=dict(type="str", required=True),
+        cellsyntPassword=dict(type="str", required=True),
+        cellsyntDestination=dict(type="str", required=True),
+        cellsyntOriginator=dict(type="str", required=False),
+        cellsyntOriginatortype=dict(type="str", required=False),
+        cellsyntAllowLongSMS=dict(type="bool", required=False),
+    ),
+    NotificationType.ELKS: dict(
+        elksUsername=dict(type="str", required=True),
+        elksAuthToken=dict(type="str", required=True),
+        elksFromNumber=dict(type="str", required=True),
+        elksToNumber=dict(type="str", required=True),
+    ),
+    NotificationType.FLUXER: dict(
+        fluxerWebhookUrl=dict(type="str", required=True),
+        fluxerUsername=dict(type="str", required=False),
+        fluxerPrefixMessage=dict(type="str", required=False),
+        fluxerMessageFormat=dict(type="str", required=False),
+        fluxerUseMessageTemplate=dict(type="bool", required=False),
+        fluxerMessageTemplate=dict(type="str", required=False),
+    ),
+    NotificationType.GOOGLESHEETS: dict(
+        googleSheetsWebhookUrl=dict(type="str", required=True),
+    ),
+    NotificationType.GRAFANAONCALL: dict(
+        GrafanaOncallURL=dict(type="str", required=True),
+    ),
+    NotificationType.GTXMESSAGING: dict(
+        gtxMessagingApiKey=dict(type="str", required=True),
+        gtxMessagingFrom=dict(type="str", required=True),
+        gtxMessagingTo=dict(type="str", required=True),
+    ),
+    NotificationType.HALOPSA: dict(
+        halowebhookurl=dict(type="str", required=True),
+        haloUsername=dict(type="str", required=True),
+        haloPassword=dict(type="str", required=True),
+    ),
+    NotificationType.HEIIONCALL: dict(
+        heiiOnCallApiKey=dict(type="str", required=True),
+        heiiOnCallTriggerId=dict(type="str", required=True),
+    ),
+    NotificationType.JIRASERVICEMANAGEMENT: dict(
+        jsmEmail=dict(type="str", required=True),
+        jsmApiToken=dict(type="str", required=True),
+        jsmCloudId=dict(type="str", required=True),
+        jsmPriority=dict(type="str", required=False),
+    ),
+    NotificationType.KEEP: dict(
+        webhookURL=dict(type="str", required=True),
+        webhookAPIKey=dict(type="str", required=False),
+    ),
+    NotificationType.NOTIFERY: dict(
+        notiferyApiKey=dict(type="str", required=True),
+        notiferyTitle=dict(type="str", required=False),
+        notiferyGroup=dict(type="str", required=False),
+    ),
+    NotificationType.ONECHAT: dict(
+        accessToken=dict(type="str", required=True),
+        recieverId=dict(type="str", required=True),
+        botId=dict(type="str", required=True),
+    ),
+    NotificationType.ONESENDER: dict(
+        onesenderURL=dict(type="str", required=True),
+        onesenderToken=dict(type="str", required=True),
+        onesenderReceiver=dict(type="str", required=True),
+        onesenderTypeReceiver=dict(type="str", required=False),
+    ),
+    NotificationType.PUMBLE: dict(
+        webhookURL=dict(type="str", required=True),
+    ),
+    NotificationType.PUSHPLUS: dict(
+        pushPlusSendKey=dict(type="str", required=True),
+    ),
+    NotificationType.RESEND: dict(
+        resendApiKey=dict(type="str", required=True),
+        resendFromEmail=dict(type="str", required=True),
+        resendToEmail=dict(type="str", required=True),
+        resendFromName=dict(type="str", required=False),
+        resendSubject=dict(type="str", required=False),
+    ),
+    NotificationType.SENDGRID: dict(
+        sendgridApiKey=dict(type="str", required=True),
+        sendgridFromEmail=dict(type="str", required=True),
+        sendgridToEmail=dict(type="str", required=True),
+        sendgridCcEmail=dict(type="str", required=False),
+        sendgridBccEmail=dict(type="str", required=False),
+        sendgridSubject=dict(type="str", required=False),
+    ),
+    NotificationType.SEVENIO: dict(
+        sevenioApiKey=dict(type="str", required=True),
+        sevenioReceiver=dict(type="str", required=True),
+        sevenioSender=dict(type="str", required=False),
+    ),
+    NotificationType.SIGNL4: dict(
+        webhookURL=dict(type="str", required=True),
+    ),
+    NotificationType.SMSIR: dict(
+        smsirApiKey=dict(type="str", required=True),
+        smsirNumber=dict(type="str", required=True),
+        smsirTemplate=dict(type="str", required=False),
+    ),
+    NotificationType.SMSPARTNER: dict(
+        smspartnerApikey=dict(type="str", required=True),
+        smspartnerPhoneNumber=dict(type="str", required=True),
+        smspartnerSenderName=dict(type="str", required=False),
+    ),
+    NotificationType.SMSPLANET: dict(
+        smsplanetApiToken=dict(type="str", required=True),
+        smsplanetPhoneNumbers=dict(type="str", required=True),
+        smsplanetSenderName=dict(type="str", required=False),
+    ),
+    NotificationType.SPUGPUSH: dict(
+        templateKey=dict(type="str", required=True),
+    ),
+    NotificationType.TELTONIKA: dict(
+        teltonikaUrl=dict(type="str", required=True),
+        teltonikaUsername=dict(type="str", required=True),
+        teltonikaPassword=dict(type="str", required=True),
+        teltonikaPhoneNumber=dict(type="str", required=True),
+        teltonikaModem=dict(type="str", required=False),
+        teltonikaUnsafeTls=dict(type="bool", required=False),
+    ),
+    NotificationType.THREEMA: dict(
+        threemaSenderIdentity=dict(type="str", required=True),
+        threemaSecret=dict(type="str", required=True),
+        threemaRecipient=dict(type="str", required=True),
+        threemaRecipientType=dict(type="str", required=False),
+    ),
+    NotificationType.WAHA: dict(
+        wahaApiUrl=dict(type="str", required=True),
+        wahaApiKey=dict(type="str", required=True),
+        wahaChatId=dict(type="str", required=True),
+        wahaSession=dict(type="str", required=False),
+    ),
+    NotificationType.WEBPUSH: dict(
+        subscription=dict(type="str", required=True),
+    ),
+    NotificationType.WHAPI: dict(
+        whapiAuthToken=dict(type="str", required=True),
+        whapiRecipient=dict(type="str", required=True),
+        whapiApiUrl=dict(type="str", required=False),
+    ),
+    NotificationType.WHATSAPP360MESSENGER: dict(
+        Whatsapp360messengerAuthToken=dict(type="str", required=True),
+        Whatsapp360messengerRecipient=dict(type="str", required=True),
+        Whatsapp360messengerGroupId=dict(type="str", required=False),
+        Whatsapp360messengerGroupIds=dict(type="str", required=False),
+        Whatsapp360messengerUseTemplate=dict(type="bool", required=False),
+        Whatsapp360messengerTemplate=dict(type="str", required=False),
+    ),
+    NotificationType.WPUSH: dict(
+        wpushAPIkey=dict(type="str", required=True),
+        wpushChannel=dict(type="str", required=False),
+    ),
+    NotificationType.YZJ: dict(
+        yzjWebHookUrl=dict(type="str", required=True),
+        yzjToken=dict(type="str", required=False),
     ),
 }
 

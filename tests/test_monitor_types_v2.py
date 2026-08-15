@@ -1,7 +1,7 @@
 import unittest
 from unittest.mock import MagicMock
 
-from uptime_kuma_api import MonitorType
+from uptime_kuma_api import MonitorType, UptimeKumaException
 from uptime_kuma_api.api import UptimeKumaApi, _check_arguments_monitor
 
 
@@ -20,6 +20,10 @@ class TestNewMonitorTypes(unittest.TestCase):
         self.api._parsed_version = UptimeKumaApi._parsed_version.__get__(self.api)
         # Bind _build_monitor_data to our mock so self.version resolves
         self.build = UptimeKumaApi._build_monitor_data.__get__(self.api)
+        # Bind _check_monitor_type_supported so version gates work
+        self.api._check_monitor_type_supported = (
+            UptimeKumaApi._check_monitor_type_supported.__get__(self.api)
+        )
 
     # ─── RABBITMQ ────────────────────────────────────────────────────────────
 
@@ -189,6 +193,55 @@ class TestNewMonitorTypes(unittest.TestCase):
         }
         with self.assertRaises(TypeError):
             _check_arguments_monitor(kwargs)
+
+    # ─── PM2 ────────────────────────────────────────────────────────────────
+
+    def test_pm2_basic(self):
+        """PM2 with all required fields produces expected dict output."""
+        self.api.version = "2.5.0"
+        result = self.build(
+            type=MonitorType.PM2,
+            name="test pm2",
+            system_service_name="my-app",
+        )
+        assert result["type"] == MonitorType.PM2
+        assert result["name"] == "test pm2"
+        assert result["system_service_name"] == "my-app"
+
+    def test_pm2_missing_service_name(self):
+        """PM2 without system_service_name raises TypeError."""
+        kwargs = {
+            "type": MonitorType.PM2,
+            "name": "test pm2",
+            "interval": 60,
+            "maxretries": 1,
+            "retryInterval": 60,
+            "accepted_statuscodes": ["200-299"],
+            "dns_resolve_type": "A",
+        }
+        with self.assertRaises(TypeError):
+            _check_arguments_monitor(kwargs)
+
+    def test_pm2_version_gate(self):
+        """PM2 is rejected on server versions below 2.5."""
+        self.api.version = "2.4.0"
+        with self.assertRaises(UptimeKumaException):
+            self.build(
+                type=MonitorType.PM2,
+                name="test pm2",
+                system_service_name="my-app",
+            )
+
+    def test_pm2_accepted_on_2_5(self):
+        """PM2 is accepted on server version 2.5.0."""
+        self.api.version = "2.5.0"
+        result = self.build(
+            type=MonitorType.PM2,
+            name="pm2 on 2.5",
+            system_service_name="worker",
+        )
+        assert result["type"] == MonitorType.PM2
+        assert result["system_service_name"] == "worker"
 
     # ─── Port Defaults ───────────────────────────────────────────────────────
 

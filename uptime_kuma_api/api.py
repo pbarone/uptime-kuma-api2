@@ -83,6 +83,8 @@ _V2_ONLY_MONITOR_TYPES = {
     MonitorType.ORACLEDB: "2.3",
     # louislam/uptime-kuma#7214, milestone 2.5.0.
     MonitorType.NTP: "2.5",
+    # louislam/uptime-kuma 2.5.0; absent at 2.4.1.
+    MonitorType.PM2: "2.5",
 }
 
 
@@ -440,6 +442,7 @@ def _check_arguments_monitor(kwargs) -> None:
         MonitorType.SNMP: ["hostname", "snmpOid"],
         MonitorType.SMTP: ["hostname"],
         MonitorType.SYSTEM_SERVICE: ["system_service_name"],
+        MonitorType.PM2: ["system_service_name"],
         MonitorType.NTP: ["hostname"],
         MonitorType.ORACLEDB: ["databaseConnectionString"],
     }
@@ -1580,8 +1583,8 @@ class UptimeKumaApi(object):
                 "smtpSecurity": smtpSecurity,
             })
 
-        # SYSTEM_SERVICE
-        if type == MonitorType.SYSTEM_SERVICE:
+        # SYSTEM_SERVICE / PM2
+        if type in (MonitorType.SYSTEM_SERVICE, MonitorType.PM2):
             data.update({
                 "system_service_name": system_service_name,
             })

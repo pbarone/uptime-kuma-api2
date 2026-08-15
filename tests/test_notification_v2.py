@@ -873,6 +873,412 @@ class TestNewNotificationProviders(unittest.TestCase):
         assert data["smtpAdditionalHeaders"] == '{"X-Custom": "value"}'
         _check_arguments_notification(data)
 
+    # ─── Bale ─────────────────────────────────────────────────────────────
+
+    def test_bale_valid(self):
+        """Bale: all required fields pass validation."""
+        data = _build_notification_data(
+            name="test",
+            type=NotificationType.BALE,
+            baleBotToken="bot-token-123",
+            baleChatID="12345",
+        )
+        assert data["type"] == NotificationType.BALE
+        assert data["baleBotToken"] == "bot-token-123"
+        assert data["baleChatID"] == "12345"
+        _check_arguments_notification(data)
+
+    def test_bale_missing_token(self):
+        """Bale: missing baleBotToken raises."""
+        data = _build_notification_data(
+            name="test",
+            type=NotificationType.BALE,
+            baleChatID="12345",
+        )
+        with self.assertRaises(TypeError):
+            _check_arguments_notification(data)
+
+    # ─── Bitrix24 ─────────────────────────────────────────────────────────
+
+    def test_bitrix24_valid(self):
+        """Bitrix24: all required fields pass validation."""
+        data = _build_notification_data(
+            name="test",
+            type=NotificationType.BITRIX24,
+            bitrix24WebhookURL="https://b24.example.com/rest/1/abc/",
+            bitrix24UserID="42",
+        )
+        assert data["type"] == NotificationType.BITRIX24
+        _check_arguments_notification(data)
+
+    def test_bitrix24_missing_webhook(self):
+        """Bitrix24: missing bitrix24WebhookURL raises."""
+        data = _build_notification_data(
+            name="test",
+            type=NotificationType.BITRIX24,
+            bitrix24UserID="42",
+        )
+        with self.assertRaises(TypeError):
+            _check_arguments_notification(data)
+
+    # ─── CallMeBot ────────────────────────────────────────────────────────
+
+    def test_callmebot_valid(self):
+        """CallMeBot: required endpoint passes validation."""
+        data = _build_notification_data(
+            name="test",
+            type=NotificationType.CALLMEBOT,
+            callMeBotEndpoint="https://api.callmebot.com/whatsapp.php?phone=123&apikey=abc&text=test",
+        )
+        assert data["type"] == NotificationType.CALLMEBOT
+        _check_arguments_notification(data)
+
+    def test_callmebot_missing_endpoint(self):
+        """CallMeBot: missing callMeBotEndpoint raises."""
+        data = _build_notification_data(
+            name="test",
+            type=NotificationType.CALLMEBOT,
+        )
+        with self.assertRaises(TypeError):
+            _check_arguments_notification(data)
+
+    # ─── Cellsynt ─────────────────────────────────────────────────────────
+
+    def test_cellsynt_valid(self):
+        """Cellsynt: all required fields pass validation."""
+        data = _build_notification_data(
+            name="test",
+            type=NotificationType.CELLSYNT,
+            cellsyntLogin="user",
+            cellsyntPassword="pass",
+            cellsyntDestination="+46701234567",
+        )
+        assert data["type"] == NotificationType.CELLSYNT
+        _check_arguments_notification(data)
+
+    def test_cellsynt_missing_login(self):
+        """Cellsynt: missing cellsyntLogin raises."""
+        data = _build_notification_data(
+            name="test",
+            type=NotificationType.CELLSYNT,
+            cellsyntPassword="pass",
+            cellsyntDestination="+46701234567",
+        )
+        with self.assertRaises(TypeError):
+            _check_arguments_notification(data)
+
+    # ─── Resend ───────────────────────────────────────────────────────────
+
+    def test_resend_valid(self):
+        """Resend: all required fields pass validation."""
+        data = _build_notification_data(
+            name="test",
+            type=NotificationType.RESEND,
+            resendApiKey="re_abc123",
+            resendFromEmail="noreply@example.com",
+            resendToEmail="admin@example.com",
+        )
+        assert data["type"] == NotificationType.RESEND
+        assert data["resendApiKey"] == "re_abc123"
+        _check_arguments_notification(data)
+
+    def test_resend_missing_api_key(self):
+        """Resend: missing resendApiKey raises."""
+        data = _build_notification_data(
+            name="test",
+            type=NotificationType.RESEND,
+            resendFromEmail="noreply@example.com",
+            resendToEmail="admin@example.com",
+        )
+        with self.assertRaises(TypeError):
+            _check_arguments_notification(data)
+
+    def test_resend_optional_fields(self):
+        """Resend: optional fields are included."""
+        data = _build_notification_data(
+            name="test",
+            type=NotificationType.RESEND,
+            resendApiKey="re_abc123",
+            resendFromEmail="noreply@example.com",
+            resendToEmail="admin@example.com",
+            resendFromName="Monitoring",
+            resendSubject="Alert!",
+        )
+        assert data["resendFromName"] == "Monitoring"
+        assert data["resendSubject"] == "Alert!"
+        _check_arguments_notification(data)
+
+    # ─── SendGrid ─────────────────────────────────────────────────────────
+
+    def test_sendgrid_valid(self):
+        """SendGrid: all required fields pass validation."""
+        data = _build_notification_data(
+            name="test",
+            type=NotificationType.SENDGRID,
+            sendgridApiKey="SG.key",
+            sendgridFromEmail="sender@example.com",
+            sendgridToEmail="recipient@example.com",
+        )
+        assert data["type"] == NotificationType.SENDGRID
+        _check_arguments_notification(data)
+
+    def test_sendgrid_missing_api_key(self):
+        """SendGrid: missing sendgridApiKey raises."""
+        data = _build_notification_data(
+            name="test",
+            type=NotificationType.SENDGRID,
+            sendgridFromEmail="sender@example.com",
+            sendgridToEmail="recipient@example.com",
+        )
+        with self.assertRaises(TypeError):
+            _check_arguments_notification(data)
+
+    # ─── Pumble ───────────────────────────────────────────────────────────
+
+    def test_pumble_valid(self):
+        """Pumble: required webhookURL passes validation."""
+        data = _build_notification_data(
+            name="test",
+            type=NotificationType.PUMBLE,
+            webhookURL="https://api.pumble.com/hooks/abc",
+        )
+        assert data["type"] == NotificationType.PUMBLE
+        _check_arguments_notification(data)
+
+    def test_pumble_missing_webhook(self):
+        """Pumble: missing webhookURL raises."""
+        data = _build_notification_data(
+            name="test",
+            type=NotificationType.PUMBLE,
+        )
+        with self.assertRaises(TypeError):
+            _check_arguments_notification(data)
+
+    # ─── Threema ──────────────────────────────────────────────────────────
+
+    def test_threema_valid(self):
+        """Threema: all required fields pass validation."""
+        data = _build_notification_data(
+            name="test",
+            type=NotificationType.THREEMA,
+            threemaSenderIdentity="*MYID123",
+            threemaSecret="secret-abc",
+            threemaRecipient="RECVID99",
+        )
+        assert data["type"] == NotificationType.THREEMA
+        _check_arguments_notification(data)
+
+    def test_threema_missing_secret(self):
+        """Threema: missing threemaSecret raises."""
+        data = _build_notification_data(
+            name="test",
+            type=NotificationType.THREEMA,
+            threemaSenderIdentity="*MYID123",
+            threemaRecipient="RECVID99",
+        )
+        with self.assertRaises(TypeError):
+            _check_arguments_notification(data)
+
+    # ─── WAHA ─────────────────────────────────────────────────────────────
+
+    def test_waha_valid(self):
+        """WAHA: all required fields pass validation."""
+        data = _build_notification_data(
+            name="test",
+            type=NotificationType.WAHA,
+            wahaApiUrl="http://localhost:3000",
+            wahaApiKey="api-key-123",
+            wahaChatId="5511999999999@c.us",
+        )
+        assert data["type"] == NotificationType.WAHA
+        _check_arguments_notification(data)
+
+    def test_waha_missing_api_url(self):
+        """WAHA: missing wahaApiUrl raises."""
+        data = _build_notification_data(
+            name="test",
+            type=NotificationType.WAHA,
+            wahaApiKey="api-key-123",
+            wahaChatId="5511999999999@c.us",
+        )
+        with self.assertRaises(TypeError):
+            _check_arguments_notification(data)
+
+    # ─── Whapi ────────────────────────────────────────────────────────────
+
+    def test_whapi_valid(self):
+        """Whapi: all required fields pass validation."""
+        data = _build_notification_data(
+            name="test",
+            type=NotificationType.WHAPI,
+            whapiAuthToken="token-abc",
+            whapiRecipient="5511999999999",
+        )
+        assert data["type"] == NotificationType.WHAPI
+        _check_arguments_notification(data)
+
+    def test_whapi_missing_token(self):
+        """Whapi: missing whapiAuthToken raises."""
+        data = _build_notification_data(
+            name="test",
+            type=NotificationType.WHAPI,
+            whapiRecipient="5511999999999",
+        )
+        with self.assertRaises(TypeError):
+            _check_arguments_notification(data)
+
+    # ─── Grafana OnCall ───────────────────────────────────────────────────
+
+    def test_grafana_oncall_valid(self):
+        """Grafana OnCall: required URL passes validation."""
+        data = _build_notification_data(
+            name="test",
+            type=NotificationType.GRAFANAONCALL,
+            GrafanaOncallURL="https://oncall.grafana.net/integrations/v1/abc/",
+        )
+        assert data["type"] == NotificationType.GRAFANAONCALL
+        _check_arguments_notification(data)
+
+    def test_grafana_oncall_missing_url(self):
+        """Grafana OnCall: missing GrafanaOncallURL raises."""
+        data = _build_notification_data(
+            name="test",
+            type=NotificationType.GRAFANAONCALL,
+        )
+        with self.assertRaises(TypeError):
+            _check_arguments_notification(data)
+
+    # ─── Teltonika ────────────────────────────────────────────────────────
+
+    def test_teltonika_valid(self):
+        """Teltonika: all required fields pass validation."""
+        data = _build_notification_data(
+            name="test",
+            type=NotificationType.TELTONIKA,
+            teltonikaUrl="http://192.168.1.1",
+            teltonikaUsername="admin",
+            teltonikaPassword="password",
+            teltonikaPhoneNumber="+37060000000",
+        )
+        assert data["type"] == NotificationType.TELTONIKA
+        _check_arguments_notification(data)
+
+    def test_teltonika_missing_url(self):
+        """Teltonika: missing teltonikaUrl raises."""
+        data = _build_notification_data(
+            name="test",
+            type=NotificationType.TELTONIKA,
+            teltonikaUsername="admin",
+            teltonikaPassword="password",
+            teltonikaPhoneNumber="+37060000000",
+        )
+        with self.assertRaises(TypeError):
+            _check_arguments_notification(data)
+
+    # ─── PushPlus ─────────────────────────────────────────────────────────
+
+    def test_pushplus_valid(self):
+        """PushPlus: required field passes validation."""
+        data = _build_notification_data(
+            name="test",
+            type=NotificationType.PUSHPLUS,
+            pushPlusSendKey="send-key-abc",
+        )
+        assert data["type"] == NotificationType.PUSHPLUS
+        _check_arguments_notification(data)
+
+    def test_pushplus_missing_key(self):
+        """PushPlus: missing pushPlusSendKey raises."""
+        data = _build_notification_data(
+            name="test",
+            type=NotificationType.PUSHPLUS,
+        )
+        with self.assertRaises(TypeError):
+            _check_arguments_notification(data)
+
+    # ─── WPush ────────────────────────────────────────────────────────────
+
+    def test_wpush_valid(self):
+        """WPush: required field passes validation."""
+        data = _build_notification_data(
+            name="test",
+            type=NotificationType.WPUSH,
+            wpushAPIkey="api-key-xyz",
+        )
+        assert data["type"] == NotificationType.WPUSH
+        _check_arguments_notification(data)
+
+    def test_wpush_missing_key(self):
+        """WPush: missing wpushAPIkey raises."""
+        data = _build_notification_data(
+            name="test",
+            type=NotificationType.WPUSH,
+        )
+        with self.assertRaises(TypeError):
+            _check_arguments_notification(data)
+
+
+class TestAllNewProvidersHaveOptions(unittest.TestCase):
+    """Ensure every new provider added in 2.5.0 has an options table entry."""
+
+    NEW_PROVIDERS = [
+        NotificationType.BALE,
+        NotificationType.BITRIX24,
+        NotificationType.CALLMEBOT,
+        NotificationType.CELLSYNT,
+        NotificationType.ELKS,
+        NotificationType.FLUXER,
+        NotificationType.GOOGLESHEETS,
+        NotificationType.GRAFANAONCALL,
+        NotificationType.GTXMESSAGING,
+        NotificationType.HALOPSA,
+        NotificationType.HEIIONCALL,
+        NotificationType.JIRASERVICEMANAGEMENT,
+        NotificationType.KEEP,
+        NotificationType.NOTIFERY,
+        NotificationType.ONECHAT,
+        NotificationType.ONESENDER,
+        NotificationType.PUMBLE,
+        NotificationType.PUSHPLUS,
+        NotificationType.RESEND,
+        NotificationType.SENDGRID,
+        NotificationType.SEVENIO,
+        NotificationType.SIGNL4,
+        NotificationType.SMSIR,
+        NotificationType.SMSPARTNER,
+        NotificationType.SMSPLANET,
+        NotificationType.SPUGPUSH,
+        NotificationType.TELTONIKA,
+        NotificationType.THREEMA,
+        NotificationType.WAHA,
+        NotificationType.WEBPUSH,
+        NotificationType.WHAPI,
+        NotificationType.WHATSAPP360MESSENGER,
+        NotificationType.WPUSH,
+        NotificationType.YZJ,
+    ]
+
+    def test_all_new_providers_have_options_entry(self):
+        """Every new provider has an entry in notification_provider_options."""
+        for provider in self.NEW_PROVIDERS:
+            with self.subTest(provider=provider.value):
+                self.assertIn(
+                    provider,
+                    notification_provider_options,
+                    f"{provider.value} missing from notification_provider_options",
+                )
+
+    def test_all_new_providers_have_at_least_one_required_field(self):
+        """Every new provider has at least one required field declared."""
+        for provider in self.NEW_PROVIDERS:
+            with self.subTest(provider=provider.value):
+                opts = notification_provider_options[provider]
+                required = [k for k, v in opts.items() if v.get("required")]
+                self.assertGreater(
+                    len(required), 0,
+                    f"{provider.value} has no required fields",
+                )
+
 
 if __name__ == "__main__":
     unittest.main()
