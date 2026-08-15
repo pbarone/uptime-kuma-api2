@@ -1,10 +1,13 @@
+---
+inclusion: always
+---
+
 # Git workflow and releasing
 
-Always included. It was previously `inclusion: manual`, which meant the release
-safety rules under "Publishing is irreversible" — the only place in the repo
-where the immutability of a `v*` tag is written down — loaded only if someone
-explicitly referenced `#git-and-releasing`. That is the least recoverable
-operation here, so it should never have depended on being asked for.
+Previously `inclusion: manual`, which meant the release safety rules under
+"Publishing is irreversible" loaded only if someone explicitly referenced
+`#git-and-releasing`. That is the least recoverable operation here, so it should
+never have depended on being asked for.
 
 ## Commit messages — Conventional Commits
 
