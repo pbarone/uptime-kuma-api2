@@ -1218,8 +1218,183 @@ class TestNewNotificationProviders(unittest.TestCase):
             _check_arguments_notification(data)
 
 
+class TestProviders251(unittest.TestCase):
+    """Unit tests for the six providers added in Uptime Kuma 2.5.1:
+    bearsms, ClickUp, Milky, openwa, pinglet, TurboSMTP."""
+
+    # --- bearsms ---
+
+    def test_bearsms_valid(self):
+        """bearsms: valid with all required fields."""
+        data = _build_notification_data(
+            name="test",
+            type=NotificationType.BEARSMS,
+            bearsmsUsername="user",
+            bearsmsHashKey="hash",
+            bearsmsPhoneNumber="9725000000",
+        )
+        assert data["type"] == NotificationType.BEARSMS
+        _check_arguments_notification(data)
+
+    def test_bearsms_missing_required(self):
+        """bearsms: missing bearsmsHashKey raises."""
+        data = _build_notification_data(
+            name="test",
+            type=NotificationType.BEARSMS,
+            bearsmsUsername="user",
+            bearsmsPhoneNumber="9725000000",
+        )
+        with self.assertRaises(TypeError):
+            _check_arguments_notification(data)
+
+    # --- ClickUp ---
+
+    def test_clickup_valid(self):
+        """ClickUp: valid with all required fields."""
+        data = _build_notification_data(
+            name="test",
+            type=NotificationType.CLICKUP,
+            clickupToken="token",
+            clickupWorkspaceId="ws-1",
+            clickupChannelId="ch-1",
+        )
+        assert data["type"] == NotificationType.CLICKUP
+        _check_arguments_notification(data)
+
+    def test_clickup_missing_required(self):
+        """ClickUp: missing clickupChannelId raises."""
+        data = _build_notification_data(
+            name="test",
+            type=NotificationType.CLICKUP,
+            clickupToken="token",
+            clickupWorkspaceId="ws-1",
+        )
+        with self.assertRaises(TypeError):
+            _check_arguments_notification(data)
+
+    # --- Milky ---
+
+    def test_milky_valid(self):
+        """Milky: valid with all required fields."""
+        data = _build_notification_data(
+            name="test",
+            type=NotificationType.MILKY,
+            httpAddr="http://localhost/",
+            accessToken="token",
+            recieverId="123",
+        )
+        assert data["type"] == NotificationType.MILKY
+        _check_arguments_notification(data)
+
+    def test_milky_missing_required(self):
+        """Milky: missing recieverId raises."""
+        data = _build_notification_data(
+            name="test",
+            type=NotificationType.MILKY,
+            httpAddr="http://localhost/",
+            accessToken="token",
+        )
+        with self.assertRaises(TypeError):
+            _check_arguments_notification(data)
+
+    # --- openwa ---
+
+    def test_openwa_valid(self):
+        """openwa: valid with all required fields."""
+        data = _build_notification_data(
+            name="test",
+            type=NotificationType.OPENWA,
+            openwaApiUrl="http://localhost:2785/",
+            openwaApiKey="key",
+            openwaSession="default",
+            openwaChatId="123@c.us",
+        )
+        assert data["type"] == NotificationType.OPENWA
+        _check_arguments_notification(data)
+
+    def test_openwa_missing_required(self):
+        """openwa: missing openwaChatId raises."""
+        data = _build_notification_data(
+            name="test",
+            type=NotificationType.OPENWA,
+            openwaApiUrl="http://localhost:2785/",
+            openwaApiKey="key",
+            openwaSession="default",
+        )
+        with self.assertRaises(TypeError):
+            _check_arguments_notification(data)
+
+    # --- pinglet ---
+
+    def test_pinglet_valid(self):
+        """pinglet: valid with all required fields."""
+        data = _build_notification_data(
+            name="test",
+            type=NotificationType.PINGLET,
+            pingletPublishUrl="https://app.pinglet.co.uk/ns/alerts",
+            pingletApiKey="key",
+        )
+        assert data["type"] == NotificationType.PINGLET
+        _check_arguments_notification(data)
+
+    def test_pinglet_missing_required(self):
+        """pinglet: missing pingletApiKey raises."""
+        data = _build_notification_data(
+            name="test",
+            type=NotificationType.PINGLET,
+            pingletPublishUrl="https://app.pinglet.co.uk/ns/alerts",
+        )
+        with self.assertRaises(TypeError):
+            _check_arguments_notification(data)
+
+    # --- TurboSMTP ---
+
+    def test_turbosmtp_valid(self):
+        """TurboSMTP: valid with all required fields."""
+        data = _build_notification_data(
+            name="test",
+            type=NotificationType.TURBOSMTP,
+            turbosmtpConsumerKey="ck",
+            turbosmtpConsumerSecret="cs",
+            turbosmtpRegion="us",
+            turbosmtpFromEmail="from@example.com",
+            turbosmtpToEmail="to@example.com",
+        )
+        assert data["type"] == NotificationType.TURBOSMTP
+        _check_arguments_notification(data)
+
+    def test_turbosmtp_missing_required(self):
+        """TurboSMTP: missing turbosmtpToEmail raises."""
+        data = _build_notification_data(
+            name="test",
+            type=NotificationType.TURBOSMTP,
+            turbosmtpConsumerKey="ck",
+            turbosmtpConsumerSecret="cs",
+            turbosmtpRegion="us",
+            turbosmtpFromEmail="from@example.com",
+        )
+        with self.assertRaises(TypeError):
+            _check_arguments_notification(data)
+
+    def test_turbosmtp_optional_fields_accepted(self):
+        """TurboSMTP: optional cc/bcc/subject fields pass validation."""
+        data = _build_notification_data(
+            name="test",
+            type=NotificationType.TURBOSMTP,
+            turbosmtpConsumerKey="ck",
+            turbosmtpConsumerSecret="cs",
+            turbosmtpRegion="eu",
+            turbosmtpFromEmail="from@example.com",
+            turbosmtpToEmail="to@example.com",
+            turbosmtpCcEmail="cc@example.com",
+            turbosmtpBccEmail="bcc@example.com",
+            turbosmtpSubject="Custom subject",
+        )
+        _check_arguments_notification(data)
+
+
 class TestAllNewProvidersHaveOptions(unittest.TestCase):
-    """Ensure every new provider added in 2.5.0 has an options table entry."""
+    """Ensure every new provider (2.5.0 and 2.5.1) has an options table entry."""
 
     NEW_PROVIDERS = [
         NotificationType.BALE,
@@ -1256,6 +1431,13 @@ class TestAllNewProvidersHaveOptions(unittest.TestCase):
         NotificationType.WHATSAPP360MESSENGER,
         NotificationType.WPUSH,
         NotificationType.YZJ,
+        # Added in Uptime Kuma 2.5.1
+        NotificationType.BEARSMS,
+        NotificationType.CLICKUP,
+        NotificationType.MILKY,
+        NotificationType.OPENWA,
+        NotificationType.PINGLET,
+        NotificationType.TURBOSMTP,
     ]
 
     def test_all_new_providers_have_options_entry(self):

@@ -1,4 +1,20 @@
 ## Changelog
+### Release 2.8.0
+A feature release adding 6 notification providers from Uptime Kuma 2.5.1.
+Notification provider options are client-side additive data and are not version
+gated, so this is non-breaking on every final release in the supported 1.21.3
+through Uptime Kuma 2.5.0 range.
+
+#### Features
+- **6 new notification providers** from Uptime Kuma 2.5.1: BearSMS, ClickUp,
+  Milky, OpenWA, Pinglet, TurboSMTP. Closes
+  [#60](https://github.com/pbarone/uptime-kuma-api2/issues/60).
+
+  (The auto-opened issue titled these as "2.5.0" additions; the upstream
+  coverage scan reads the server's `master` branch and stamps it with the
+  current `package.json` version. Confirmed against Uptime Kuma's own tags —
+  all six providers first shipped in the `2.5.1` release.)
+
 ### Release 2.7.0
 A feature release adding the PM2 monitor type and 34 notification providers
 from Uptime Kuma 2.5.0. Non-breaking on every final release in the supported
