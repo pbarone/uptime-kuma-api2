@@ -301,6 +301,24 @@ class NotificationType(str, Enum):
     YZJ = "YZJ"
     """YZJ"""
 
+    BEARSMS = "bearsms"
+    """BearSMS"""
+
+    CLICKUP = "ClickUp"
+    """ClickUp"""
+
+    MILKY = "Milky"
+    """Milky"""
+
+    OPENWA = "openwa"
+    """OpenWA"""
+
+    PINGLET = "pinglet"
+    """Pinglet"""
+
+    TURBOSMTP = "TurboSMTP"
+    """TurboSMTP"""
+
 
 notification_provider_options = {
     NotificationType.ALERTA: dict(
@@ -841,6 +859,46 @@ notification_provider_options = {
     NotificationType.YZJ: dict(
         yzjWebHookUrl=dict(type="str", required=True),
         yzjToken=dict(type="str", required=False),
+    ),
+    NotificationType.BEARSMS: dict(
+        bearsmsUsername=dict(type="str", required=True),
+        bearsmsHashKey=dict(type="str", required=True),
+        bearsmsSenderId=dict(type="str", required=False),
+        bearsmsPhoneNumber=dict(type="str", required=True),
+    ),
+    NotificationType.CLICKUP: dict(
+        clickupToken=dict(type="str", required=True),
+        clickupWorkspaceId=dict(type="str", required=True),
+        clickupChannelId=dict(type="str", required=True),
+        clickupDisableUrl=dict(type="bool", required=False),
+    ),
+    NotificationType.MILKY: dict(
+        httpAddr=dict(type="str", required=True),
+        accessToken=dict(type="str", required=True),
+        msgType=dict(type="str", required=False),
+        recieverId=dict(type="str", required=True),
+    ),
+    NotificationType.OPENWA: dict(
+        openwaApiUrl=dict(type="str", required=True),
+        openwaApiKey=dict(type="str", required=True),
+        openwaSession=dict(type="str", required=True),
+        openwaChatId=dict(type="str", required=True),
+        openwaUseCustomMessage=dict(type="bool", required=False),
+        openwaCustomMessage=dict(type="str", required=False),
+    ),
+    NotificationType.PINGLET: dict(
+        pingletPublishUrl=dict(type="str", required=True),
+        pingletApiKey=dict(type="str", required=True),
+    ),
+    NotificationType.TURBOSMTP: dict(
+        turbosmtpConsumerKey=dict(type="str", required=True),
+        turbosmtpConsumerSecret=dict(type="str", required=True),
+        turbosmtpRegion=dict(type="str", required=True),
+        turbosmtpFromEmail=dict(type="str", required=True),
+        turbosmtpToEmail=dict(type="str", required=True),
+        turbosmtpCcEmail=dict(type="str", required=False),
+        turbosmtpBccEmail=dict(type="str", required=False),
+        turbosmtpSubject=dict(type="str", required=False),
     ),
 }
 
