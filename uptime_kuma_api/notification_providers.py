@@ -319,6 +319,9 @@ class NotificationType(str, Enum):
     TURBOSMTP = "TurboSMTP"
     """TurboSMTP"""
 
+    SIGNALGRID = "signalgrid"
+    """Signalgrid"""
+
 
 notification_provider_options = {
     NotificationType.ALERTA: dict(
@@ -899,6 +902,10 @@ notification_provider_options = {
         turbosmtpCcEmail=dict(type="str", required=False),
         turbosmtpBccEmail=dict(type="str", required=False),
         turbosmtpSubject=dict(type="str", required=False),
+    ),
+    NotificationType.SIGNALGRID: dict(
+        signalgridClientKey=dict(type="str", required=True),
+        signalgridChannel=dict(type="str", required=True),
     ),
 }
 
