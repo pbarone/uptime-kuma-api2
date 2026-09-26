@@ -23,18 +23,29 @@ import subprocess
 import sys
 import tempfile
 
+from packaging.version import InvalidVersion
+from packaging.version import parse as parse_version
+
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from uptime_kuma_api.monitor_type import MonitorType
 from uptime_kuma_api.notification_providers import NotificationType
 
 
-def extract_names_from_js(directory, pattern=r'name\s*=\s*["\']([^"\']+)["\']'):
+def extract_names_from_js(directory, prefer_type=False,
+                          pattern=r'name\s*=\s*["\']([^"\']+)["\']'):
     """Extract type identifiers from all .js files in a directory.
 
-    For monitor types, prefers the `type = "..."` property (the wire value)
-    over `name = "..."` (the display name), since newer server versions use
-    both. For notification providers, `name = "..."` is the wire value.
+    Monitor types and notification providers use different wire keys, so the
+    caller must say which it wants:
+
+    - Monitor types (``prefer_type=True``): the wire value is the ``type``
+      property, so prefer ``type = "..."`` and fall back to ``name = "..."``.
+    - Notification providers (``prefer_type=False``, the default): the wire
+      value is *always* ``name = "..."``. These files also contain a local
+      ``type`` variable in their send logic (e.g. ``type = "CRIT"`` in
+      signalgrid.js as a severity flag), which is NOT a provider identifier,
+      so ``type`` must never be consulted here.
     """
     names = set()
     if not os.path.isdir(directory):
@@ -46,16 +57,17 @@ def extract_names_from_js(directory, pattern=r'name\s*=\s*["\']([^"\']+)["\']'):
         with open(filepath, encoding="utf-8", errors="replace") as f:
             content = f.read()
 
-        # Prefer `type = "..."` (wire value) if present.
-        # The regex requires `type` at the start of a line (after optional
-        # whitespace) to avoid matching inside SQL strings like
-        # `WHERE type = 'certificate'` in globalping.js.
-        type_match = re.search(r'^\s*type\s*=\s*["\']([^"\']+)["\']', content, re.MULTILINE)
-        if type_match:
-            names.add(type_match.group(1))
-            continue
+        if prefer_type:
+            # Prefer `type = "..."` (the monitor wire value) if present.
+            # The regex requires `type` at the start of a line (after optional
+            # whitespace) to avoid matching inside SQL strings like
+            # `WHERE type = 'certificate'` in globalping.js.
+            type_match = re.search(r'^\s*type\s*=\s*["\']([^"\']+)["\']', content, re.MULTILINE)
+            if type_match:
+                names.add(type_match.group(1))
+                continue
 
-        # Fall back to `name = "..."` 
+        # `name = "..."` (notification wire value, or monitor fallback)
         for match in re.finditer(pattern, content):
             value = match.group(1)
             # Skip obvious non-provider artifacts (URLs, protocols, etc.)
@@ -130,12 +142,32 @@ def main():
         version = get_upstream_version(upstream_path)
         print(f"upstream version: {version}")
 
+        # Skip pre-release upstreams (betas, RCs). The default branch tracks
+        # the next major while it is still a beta (e.g. 3.0.0-beta.0), whose
+        # new monitor types / providers are not yet a stable contract to gate
+        # against. Reporting them opens an issue for work we should not do yet.
+        # When that version ships as a stable release, this guard stops firing
+        # and the next scan opens the actionable issue. An unparseable version
+        # is treated as non-pre-release so a real gap is never silently hidden.
+        try:
+            is_prerelease = parse_version(version).is_prerelease
+        except InvalidVersion:
+            is_prerelease = False
+        if is_prerelease:
+            print(f"\nupstream {version} is a pre-release - skipping gap check "
+                  "(will re-check once a stable version ships)")
+            if os.environ.get("GITHUB_OUTPUT"):
+                with open(os.environ["GITHUB_OUTPUT"], "a") as f:
+                    f.write("has_gaps=false\n")
+                    f.write(f"upstream_version={version}\n")
+            return 0
+
         # Extract server-side names
         notification_dir = os.path.join(upstream_path, "server", "notification-providers")
         monitor_dir = os.path.join(upstream_path, "server", "monitor-types")
 
         server_notifications = extract_names_from_js(notification_dir)
-        server_monitors = extract_names_from_js(monitor_dir)
+        server_monitors = extract_names_from_js(monitor_dir, prefer_type=True)
 
         # Remove the base class file artifact if present
         server_notifications.discard("notification-provider")
