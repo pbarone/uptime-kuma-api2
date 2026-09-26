@@ -1,4 +1,22 @@
 ## Changelog
+### Release 2.9.0
+A feature release adding the Signalgrid notification provider from Uptime Kuma
+2.5.4. Notification provider options are client-side additive data and are not
+version gated, so this is non-breaking: on a server older than 2.5.4 the
+provider type is simply rejected server-side, and every other supported release
+is unaffected.
+
+#### Features
+- **Signalgrid notification provider** (server 2.5.4+): adds
+  `NotificationType.SIGNALGRID` with `signalgridClientKey` and
+  `signalgridChannel` (both required). Closes
+  [#65](https://github.com/pbarone/uptime-kuma-api2/issues/65).
+
+  Previously missing because the upstream coverage scanner keyed notification
+  providers on a `type` variable found in `signalgrid.js`'s send logic
+  (a `CRIT`/`INFO` severity flag) instead of the provider `name`; the scanner
+  now keys on `name` only, which surfaced this pre-existing gap.
+
 ### Release 2.8.0
 A feature release adding 6 notification providers from Uptime Kuma 2.5.1.
 Notification provider options are client-side additive data and are not version

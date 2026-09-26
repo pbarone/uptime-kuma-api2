@@ -1392,6 +1392,32 @@ class TestProviders251(unittest.TestCase):
         )
         _check_arguments_notification(data)
 
+    # --- Signalgrid ---
+
+    def test_signalgrid_valid(self):
+        """Signalgrid: valid with all required fields -> no error, correct dict."""
+        data = _build_notification_data(
+            name="test",
+            type=NotificationType.SIGNALGRID,
+            signalgridClientKey="ck",
+            signalgridChannel="alerts",
+        )
+        assert data["type"] == NotificationType.SIGNALGRID
+        assert data["name"] == "test"
+        assert data["signalgridClientKey"] == "ck"
+        assert data["signalgridChannel"] == "alerts"
+        _check_arguments_notification(data)
+
+    def test_signalgrid_missing_required(self):
+        """Signalgrid: missing signalgridChannel raises."""
+        data = _build_notification_data(
+            name="test",
+            type=NotificationType.SIGNALGRID,
+            signalgridClientKey="ck",
+        )
+        with self.assertRaises(TypeError):
+            _check_arguments_notification(data)
+
 
 class TestAllNewProvidersHaveOptions(unittest.TestCase):
     """Ensure every new provider (2.5.0 and 2.5.1) has an options table entry."""
@@ -1438,6 +1464,8 @@ class TestAllNewProvidersHaveOptions(unittest.TestCase):
         NotificationType.OPENWA,
         NotificationType.PINGLET,
         NotificationType.TURBOSMTP,
+        # Added in Uptime Kuma 2.5.4
+        NotificationType.SIGNALGRID,
     ]
 
     def test_all_new_providers_have_options_entry(self):
