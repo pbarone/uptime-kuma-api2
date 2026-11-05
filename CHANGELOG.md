@@ -19,6 +19,12 @@
   on 2.4.0 and later (every field is still sent). Fixes
   [#71](https://github.com/pbarone/uptime-kuma-api2/issues/71).
 
+  Verified on real servers with the new
+  `tests/live_test_late_monitor_fields_v2.py`: 2.0.2 rejects all 13 with
+  `SQLITE_ERROR: table monitor has no column named <column>`, 2.3.2 rejects
+  `bearer_token` and `gamedigToken`, and 2.1.0 / 2.4.0 accept the fields at
+  their floors. Against the old registry the same 2.0.2 run fails all 13.
+
 ### Release 2.9.0
 A feature release adding the Signalgrid notification provider from Uptime Kuma
 2.5.4. Notification provider options are client-side additive data and are not
