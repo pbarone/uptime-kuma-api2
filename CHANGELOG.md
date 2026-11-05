@@ -1,4 +1,24 @@
 ## Changelog
+
+### Unreleased
+
+#### Bugfixes
+- 13 version-gated monitor fields now use the floor of the Uptime Kuma release
+  that added their `monitor` column instead of a blanket `2.0`, so they are
+  withheld and reported with `UnsupportedFieldWarning` on servers that lack the
+  column rather than sent to them:
+  - **2.1**: `wsSubprotocol`, `wsIgnoreSecWebsocketAcceptHeader`,
+    `domainExpiryNotification`, `saveResponse`, `saveErrorResponse`,
+    `responseMaxLength`, `retryOnlyOnStatusCodeFailure`, `screenshot_delay`,
+    `snmp_v3_username`, `subtype`, `protocol`
+  - **2.4**: `bearer_token`, `gamedigToken`
+
+  Each floor comes from the first Uptime Kuma tag whose `db/knex_migrations/`
+  creates the column; the tag and migration per field are recorded next to the
+  regression test. Nothing changes on 1.x (the fields were already withheld) or
+  on 2.4.0 and later (every field is still sent). Fixes
+  [#71](https://github.com/pbarone/uptime-kuma-api2/issues/71).
+
 ### Release 2.9.0
 A feature release adding the Signalgrid notification provider from Uptime Kuma
 2.5.4. Notification provider options are client-side additive data and are not
