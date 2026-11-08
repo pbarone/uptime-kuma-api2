@@ -24,6 +24,15 @@
   `SQLITE_ERROR: table monitor has no column named <column>`, 2.3.2 rejects
   `bearer_token` and `gamedigToken`, and 2.1.0 / 2.4.0 accept the fields at
   their floors. Against the old registry the same 2.0.2 run fails all 13.
+- The `get_heartbeats()` and `get_important_heartbeats()` caches could contain a
+  list nested inside the list after a second `heartbeatList` or
+  `importantHeartbeatList` event with `overwrite` false. Both handlers appended
+  the whole event payload as one element; they now extend the cached list. The
+  payload is a list on 1.x and 2.x alike, so there is no version gate and
+  behavior is otherwise unchanged. Reported and fixed with a test by
+  [@luckman212](https://github.com/luckman212) in
+  [#69](https://github.com/pbarone/uptime-kuma-api2/issues/69) and
+  [#70](https://github.com/pbarone/uptime-kuma-api2/pull/70).
 
 ### Release 2.9.0
 A feature release adding the Signalgrid notification provider from Uptime Kuma
