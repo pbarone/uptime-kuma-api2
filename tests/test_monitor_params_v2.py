@@ -3283,7 +3283,7 @@ class TestV2OnlyFieldsSignal(_V2FieldsApiMixin, unittest.TestCase):
         )
         message = str(caught[0].message)
         self.assertIn("bearer_token", message)
-        self.assertIn("2.0", message)
+        self.assertIn("2.4", message)
         self.assertIn(V1_VERSION, message)
 
     def test_warning_does_not_name_a_sent_field(self):
@@ -3722,6 +3722,74 @@ TYPES_FLOORED_AT_2_0 = [
     MonitorType.SMTP,
     MonitorType.MANUAL,
 ]
+
+
+# Fields whose monitor-table column first ships after 2.0, keyed to the floor and
+# the Uptime Kuma tag + migration that introduced the column (issue #71). Each was
+# found with `git grep -l '"<column>"' <tag> -- db/knex_migrations` over the 2.x
+# tags in release order.
+LATE_MONITOR_FIELD_FLOORS = {
+    "wsSubprotocol": ("2.1", "2.1.0-beta.0", "2025-02-15-2312-add-wstest.js"),
+    "wsIgnoreSecWebsocketAcceptHeader": ("2.1", "2.1.0-beta.0", "2025-02-15-2312-add-wstest.js"),
+    "domainExpiryNotification": ("2.1", "2.1.0-beta.1", "2025-09-02-0000-add-domain-expiry.js"),
+    "saveResponse": ("2.1", "2.1.0-beta.2", "2025-10-15-0001-add-monitor-response-config.js"),
+    "saveErrorResponse": ("2.1", "2.1.0-beta.2", "2025-10-15-0001-add-monitor-response-config.js"),
+    "responseMaxLength": ("2.1", "2.1.0-beta.2", "2025-10-15-0001-add-monitor-response-config.js"),
+    "retryOnlyOnStatusCodeFailure": ("2.1", "2.1.0-beta.2", "2026-01-15-0000-add-json-query-retry-only-status-code.js"),
+    "screenshot_delay": ("2.1", "2.1.0-beta.3", "2026-01-16-0000-add-screenshot-delay.js"),
+    "snmp_v3_username": ("2.1", "2.1.0-beta.3", "2025-12-31-2143-add-snmp-v3-username.js"),
+    "subtype": ("2.1", "2.1.0", "2025-12-17-0000-add-globalping-monitor.js"),
+    "protocol": ("2.1", "2.1.0", "2025-12-17-0000-add-globalping-monitor.js"),
+    "bearer_token": ("2.4", "2.4.0", "2026-05-20-0000-add-bearer-token.js"),
+    "gamedigToken": ("2.4", "2.4.0", "2026-05-25-0000-add-gamedig-token.js"),
+}
+
+# The newest final release below each floor: a server that lacks the column and
+# must therefore have the field withheld.
+LAST_RELEASE_BELOW_FLOOR = {"2.1": "2.0.2", "2.4": "2.3.2"}
+
+
+class TestLateMonitorFieldFloors(_V2FieldsApiMixin, unittest.TestCase):
+    """Fields added after 2.0 are gated at the release that added their column.
+
+    Regression for issue #71: these were floored at ``2.0``, so on 2.0.x (and,
+    for ``bearer_token`` / ``gamedigToken``, on 2.1.x-2.3.x) the gate let the
+    field through with no warning, and it reached ``bean.import()`` for a column
+    the server's schema does not have.
+    """
+
+    def test_registry_floor_matches_schema(self):
+        for name, (floor, _tag, _migration) in LATE_MONITOR_FIELD_FLOORS.items():
+            with self.subTest(field=name):
+                self.assertEqual(_V2_ONLY_MONITOR_FIELDS[name].floor, floor)
+
+    def test_withheld_on_newest_server_without_the_column(self):
+        for name, (floor, _tag, _migration) in LATE_MONITOR_FIELD_FLOORS.items():
+            version = LAST_RELEASE_BELOW_FLOOR[floor]
+            with self.subTest(field=name, version=version):
+                with warnings.catch_warnings(record=True) as caught:
+                    warnings.simplefilter("always")
+                    result = self._build_field(version, name)
+                self.assertNotIn(name, result)
+                messages = [str(w.message) for w in caught
+                            if issubclass(w.category, UnsupportedFieldWarning)]
+                self.assertEqual(len(messages), 1, messages)
+                self.assertIn(name, messages[0])
+                self.assertIn(floor, messages[0])
+                self.assertIn(version, messages[0])
+
+    def test_sent_from_the_floor_release(self):
+        for name, (floor, _tag, _migration) in LATE_MONITOR_FIELD_FLOORS.items():
+            version = floor + ".0"
+            with self.subTest(field=name, version=version):
+                with warnings.catch_warnings(record=True) as caught:
+                    warnings.simplefilter("always")
+                    result = self._build_field(version, name)
+                self.assertEqual(result[name], FIELD_SAMPLE_VALUES[name])
+                self.assertFalse(
+                    [w for w in caught
+                     if issubclass(w.category, UnsupportedFieldWarning)]
+                )
 
 
 class TestPerTypeVersionFloors(unittest.TestCase):

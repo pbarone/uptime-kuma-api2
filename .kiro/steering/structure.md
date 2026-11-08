@@ -83,6 +83,9 @@ and was one of seven copies that had to be edited in lockstep.
   - `live_test_status_page_analytics_v2_0.py` — asserts `2.0`. A 2.x container
     additionally needs `-DockerEnv UPTIME_KUMA_DB_TYPE=sqlite`, or it never
     mounts socket.io; see that runner's `.EXAMPLE`.
+  - `live_test_late_monitor_fields_v2.py` — asserts one of the exact releases
+    `2.0.2`, `2.1.0`, `2.3.2`, `2.4.0`, the releases either side of each floor it
+    checks. Run once per image, with the same `-DockerEnv` as above.
 
   The `UPTIME_KUMA_V1_*` key names are historical: they mean "the disposable
   container", whatever version it runs. The runner deliberately offers no way to
