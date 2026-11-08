@@ -200,6 +200,12 @@ _V2_ONLY_STATUS_PAGE_FIELDS = {
     "rssTitle": "2.1",
 }
 
+# How many important heartbeats get_important_heartbeats() asks a 2.x server for
+# per monitor. 500 is the LIMIT of sendImportantHeartbeatList in server/client.js
+# at 1.23.16 (the login-time push that 2.x removed), so the history depth callers
+# saw on 1.x is preserved.
+_IMPORTANT_HEARTBEAT_COUNT = 500
+
 
 def int_to_bool(data, keys) -> None:
     if isinstance(data, list):
@@ -3084,6 +3090,12 @@ class UptimeKumaApi(object):
         """
         Get important heartbeats.
 
+        On Uptime Kuma 2.0 and newer the server no longer pushes this history at
+        login, so it is requested per monitor with the
+        ``monitorImportantHeartbeatListPaged`` event: one round trip per monitor,
+        up to 500 heartbeats each, newest first. The rows keep the keys the
+        server sends (2.x adds ``retries``, and later ``response``).
+
         :return: The important heartbeats for each monitor id.
         :rtype: dict
 
@@ -3104,6 +3116,22 @@ class UptimeKumaApi(object):
                 ]
             }
         """
+        if self._parsed_version() >= parse_version("2.0"):
+            # 2.x registers monitorImportantHeartbeatListPaged (present since
+            # 2.0.0-beta.0) and never emits importantHeartbeatList, so waiting
+            # for the event would only time out.
+            result = {}
+            for monitor in self.get_monitors():
+                monitor_id = int(monitor["id"])
+                records = self._call(
+                    "monitorImportantHeartbeatListPaged",
+                    (monitor_id, 0, _IMPORTANT_HEARTBEAT_COUNT),
+                )["data"]
+                int_to_bool(records, ["important"])
+                parse_monitor_status(records)
+                result[monitor_id] = records
+            return result
+
         r = self._get_event_data(Event.IMPORTANT_HEARTBEAT_LIST)
         for i in r:
             int_to_bool(r[i], ["important"])
