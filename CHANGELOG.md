@@ -3,6 +3,21 @@
 ### Unreleased
 
 #### Bugfixes
+- `get_important_heartbeats()` no longer raises `Timeout` on Uptime Kuma 2.x.
+  It waited for the `importantHeartbeatList` event on every server, but 2.x no
+  longer pushes that list at login: in upstream `server/`, `sendImportantHeartbeatList`
+  is still defined in `client.js` but has no caller at tags 2.0.0 and 2.5.9
+  (1.23.16 still calls it from `server.js`). 2.x serves the history on request
+  through `monitorImportantHeartbeatListPaged(monitorID, offset, count)`, which
+  exists from 2.0.0-beta.0. On a server at 2.0 or newer the method now makes one
+  call per monitor for up to 500 important heartbeats (the 1.x limit), newest
+  first, and returns the same `{monitor_id: [rows]}` shape with `status` as
+  `MonitorStatus` and `important` as a bool. Rows keep the keys the server sends
+  (they already use `monitorID`; 2.x adds `retries`). Behaviour on 1.x is
+  unchanged. The cost on 2.x is one round trip per monitor. This was verified
+  against server source and mocked tests only, not yet against a live 2.x
+  server. Reported and diagnosed by @luckman212 in
+  [#63](https://github.com/pbarone/uptime-kuma-api2/issues/63).
 - 13 version-gated monitor fields now use the floor of the Uptime Kuma release
   that added their `monitor` column instead of a blanket `2.0`, so they are
   withheld and reported with `UnsupportedFieldWarning` on servers that lack the
