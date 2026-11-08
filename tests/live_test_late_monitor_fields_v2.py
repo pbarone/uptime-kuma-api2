@@ -335,6 +335,12 @@ def probe(api: UptimeKumaApi, field: str, type_, value, index: int,
 
     try:
         r = api._call("add", data)
+    except Timeout as e:
+        # Timeout subclasses UptimeKumaException, so it must be caught first:
+        # a transport failure is not the server rejecting the column.
+        verdicts[field] = (NOT_OBSERVED, f"timeout: {e}")
+        print(f"  {NOT_OBSERVED:<12} {label} -> Timeout: {e}")
+        return
     except UptimeKumaException as e:
         verdicts[field] = (REJECTED, str(e))
         print(f"  {REJECTED:<12} {label}")
