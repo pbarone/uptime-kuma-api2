@@ -131,10 +131,16 @@ _HTTP_V2_TYPES = frozenset({
 # that test, is stated for callers in docs/api.rst under
 # "Version-gated monitor fields".
 #
-# Every floor was verified against a real 1.23.2 server rather than assumed: all
+# Every field was verified against a real 1.23.2 server rather than assumed: all
 # 25 reachable fields are rejected with "table monitor has no column named ...",
-# so none of them is mis-gated. Evidence:
+# so none of them is accepted by 1.x. Evidence:
 # .kiro/specs/v2-only-fields-rule/v1-verification-results.md
+#
+# That probe shows a field is absent from 1.x; it does not show which 2.x release
+# added it. Each floor is the release whose db/knex_migrations first creates the
+# column, so fields added after 2.0.0 carry a 2.1 or 2.4 floor (issue #71). The
+# tag and migration for each are listed in tests/test_monitor_params_v2.py
+# (LATE_MONITOR_FIELD_FLOORS).
 #
 # Declaration order is the order withheld fields appear in the warning message.
 # Keep it stable: the message text is part of the warnings module's duplicate-
@@ -145,26 +151,26 @@ _V2_ONLY_MONITOR_FIELDS = {
     "ipFamily": _FieldRule("2.0", _IP_FAMILY_TYPES, _WITHHOLD),
 
     "cacheBust": _FieldRule("2.0", _HTTP_V2_TYPES, _WITHHOLD),
-    "retryOnlyOnStatusCodeFailure": _FieldRule("2.0", _HTTP_V2_TYPES, _WITHHOLD),
-    "bearer_token": _FieldRule("2.0", _HTTP_V2_TYPES, _WITHHOLD),
+    "retryOnlyOnStatusCodeFailure": _FieldRule("2.1", _HTTP_V2_TYPES, _WITHHOLD),
+    "bearer_token": _FieldRule("2.4", _HTTP_V2_TYPES, _WITHHOLD),
     "oauth_audience": _FieldRule("2.0", _HTTP_V2_TYPES, _WITHHOLD),
-    "domainExpiryNotification": _FieldRule("2.0", _HTTP_V2_TYPES, _WITHHOLD),
-    "saveResponse": _FieldRule("2.0", _HTTP_V2_TYPES, _WITHHOLD),
-    "saveErrorResponse": _FieldRule("2.0", _HTTP_V2_TYPES, _WITHHOLD),
-    "responseMaxLength": _FieldRule("2.0", _HTTP_V2_TYPES, _WITHHOLD),
+    "domainExpiryNotification": _FieldRule("2.1", _HTTP_V2_TYPES, _WITHHOLD),
+    "saveResponse": _FieldRule("2.1", _HTTP_V2_TYPES, _WITHHOLD),
+    "saveErrorResponse": _FieldRule("2.1", _HTTP_V2_TYPES, _WITHHOLD),
+    "responseMaxLength": _FieldRule("2.1", _HTTP_V2_TYPES, _WITHHOLD),
     "responsecheck": _FieldRule("2.0", _HTTP_V2_TYPES, _WITHHOLD),
 
-    "subtype": _FieldRule("2.0", None, _WITHHOLD),
-    "wsSubprotocol": _FieldRule("2.0", None, _WITHHOLD),
-    "wsIgnoreSecWebsocketAcceptHeader": _FieldRule("2.0", None, _WITHHOLD),
+    "subtype": _FieldRule("2.1", None, _WITHHOLD),
+    "wsSubprotocol": _FieldRule("2.1", None, _WITHHOLD),
+    "wsIgnoreSecWebsocketAcceptHeader": _FieldRule("2.1", None, _WITHHOLD),
     "remoteBrowsersToggle": _FieldRule("2.0", None, _WITHHOLD),
     "remote_browser": _FieldRule("2.0", None, _WITHHOLD),
-    "screenshot_delay": _FieldRule("2.0", None, _WITHHOLD),
-    "gamedigToken": _FieldRule("2.0", None, _WITHHOLD),
-    "protocol": _FieldRule("2.0", None, _WITHHOLD),
+    "screenshot_delay": _FieldRule("2.1", None, _WITHHOLD),
+    "gamedigToken": _FieldRule("2.4", None, _WITHHOLD),
+    "protocol": _FieldRule("2.1", None, _WITHHOLD),
 
     "jsonPathOperator": _FieldRule("2.0", frozenset({MonitorType.JSON_QUERY}), _WITHHOLD),
-    "snmp_v3_username": _FieldRule("2.0", frozenset({MonitorType.SNMP}), _WITHHOLD),
+    "snmp_v3_username": _FieldRule("2.1", frozenset({MonitorType.SNMP}), _WITHHOLD),
     "ping_count": _FieldRule("2.0", frozenset({MonitorType.PING}), _WITHHOLD),
     "ping_numeric": _FieldRule("2.0", frozenset({MonitorType.PING}), _WITHHOLD),
     "ping_per_request_timeout": _FieldRule("2.0", frozenset({MonitorType.PING}), _WITHHOLD),
