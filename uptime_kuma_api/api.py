@@ -837,7 +837,7 @@ class UptimeKumaApi(object):
         if monitor_id not in self._event_data[Event.HEARTBEAT_LIST] or overwrite:
             self._event_data[Event.HEARTBEAT_LIST][monitor_id] = data
         else:
-            self._event_data[Event.HEARTBEAT_LIST][monitor_id].append(data)
+            self._event_data[Event.HEARTBEAT_LIST][monitor_id].extend(data)
 
     def _event_important_heartbeat_list(self, monitor_id, data, overwrite) -> None:
         monitor_id = int(monitor_id)
@@ -847,7 +847,7 @@ class UptimeKumaApi(object):
         if monitor_id not in self._event_data[Event.IMPORTANT_HEARTBEAT_LIST] or overwrite:
             self._event_data[Event.IMPORTANT_HEARTBEAT_LIST][monitor_id] = data
         else:
-            self._event_data[Event.IMPORTANT_HEARTBEAT_LIST][monitor_id].append(data)
+            self._event_data[Event.IMPORTANT_HEARTBEAT_LIST][monitor_id].extend(data)
 
     def _event_avg_ping(self, monitor_id, data) -> None:
         monitor_id = int(monitor_id)
