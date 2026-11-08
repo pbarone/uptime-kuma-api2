@@ -34,6 +34,18 @@
   [#69](https://github.com/pbarone/uptime-kuma-api2/issues/69) and
   [#70](https://github.com/pbarone/uptime-kuma-api2/pull/70).
 
+#### Tests
+- The live probe `tests/live_test_late_monitor_fields_v2.py` recorded a timed-out
+  `add` as `REJECTED`, so a transport failure on a server below a field's floor
+  could print PASS and exit 0 without any unsupported-column response. `Timeout`
+  subclasses `UptimeKumaException`, and that handler came first in `probe()`. It
+  now records `NOT_OBSERVED`, which fails the run. Added
+  `tests/test_live_probe_timeout_v2.py` (unit test, no server). The library and
+  the 13 field floors are unaffected. Found by an automated review of
+  [#72](https://github.com/pbarone/uptime-kuma-api2/pull/72) that was unresolved
+  at merge time. Fixes
+  [#75](https://github.com/pbarone/uptime-kuma-api2/issues/75).
+
 ### Release 2.9.0
 A feature release adding the Signalgrid notification provider from Uptime Kuma
 2.5.4. Notification provider options are client-side additive data and are not
