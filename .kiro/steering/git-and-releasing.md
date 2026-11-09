@@ -109,8 +109,8 @@ protection rather than suspending it once.
 
 ### The drift coupling to watch
 
-`protect-main` requires six status checks **by literal name**: `full (3.8)`,
-`full (3.9)`, `full (3.10)`, `full (3.11)`, `full (3.12)`, `full (3.13)`. These
+`protect-main` requires five status checks **by literal name**: `full (3.10)`,
+`full (3.11)`, `full (3.12)`, `full (3.13)`, `full (3.14)`. These
 must stay in sync with the Python matrix in `.github/workflows/test.yml`. Change
 one without the other and the failure is silent, in one of two directions:
 
