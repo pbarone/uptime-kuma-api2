@@ -1,6 +1,15 @@
 ## Changelog
 
-### Unreleased
+### Release 2.9.1
+A patch release with three library fixes ([#71](https://github.com/pbarone/uptime-kuma-api2/issues/71),
+[#69](https://github.com/pbarone/uptime-kuma-api2/issues/69),
+[#63](https://github.com/pbarone/uptime-kuma-api2/issues/63)), a fix to a manual
+live-verification script ([#75](https://github.com/pbarone/uptime-kuma-api2/issues/75))
+and a CI pin. No new public API. Non-breaking on every supported release, 1.21.3
+through Uptime Kuma 2.5.x. The one behaviour change is from #71: a caller on
+Uptime Kuma 2.0.x to 2.3.x who passes any of the 13 late monitor fields now gets
+an `UnsupportedFieldWarning` and the field is withheld, where before the server
+rejected the whole request with an error.
 
 #### Bugfixes
 - `get_important_heartbeats()` no longer raises `Timeout` on Uptime Kuma 2.x.
@@ -14,10 +23,26 @@
   first, and returns the same `{monitor_id: [rows]}` shape with `status` as
   `MonitorStatus` and `important` as a bool. Rows keep the keys the server sends
   (they already use `monitorID`; 2.x adds `retries`). Behaviour on 1.x is
-  unchanged. The cost on 2.x is one round trip per monitor. This was verified
-  against server source and mocked tests only, not yet against a live 2.x
-  server. Reported and diagnosed by @luckman212 in
-  [#63](https://github.com/pbarone/uptime-kuma-api2/issues/63).
+  unchanged. The cost on 2.x is one round trip per monitor. The old method
+  waited for an event that 2.x never sends, so it raised `Timeout` unless a live
+  important heartbeat had already been pushed to that session. In that case it
+  returned only the beats received since connecting, with no history and no
+  error.
+
+  Verified live with a throwaway script against disposable containers, since
+  destroyed. The fixed library passed every check on Uptime Kuma 1.23.2 (event
+  cache path unchanged, zero calls of the paged event), 2.0.2 and 2.5.9 (exactly
+  one `monitorImportantHeartbeatListPaged` call per monitor with data
+  `(monitor_id, 0, 500)`; the processed rows had the same key set as the raw
+  server response, with `monitorID` present in every row). Row keys on 2.x are
+  `duration`, `important`, `monitorID`, `msg`, `ping`, `retries`, `status` and
+  `time`, plus `response` on 2.5.9. Unfixed 2.9.0 raised the `Timeout` on 2.5.9
+  when called on a fresh connection. The 500-row cap and newest-first ordering
+  were covered by the mocked tests and only barely exercised live, since each
+  live monitor had a single important heartbeat. Reported and diagnosed by
+  [@luckman212](https://github.com/luckman212) in
+  [#63](https://github.com/pbarone/uptime-kuma-api2/issues/63), fixed in
+  [#77](https://github.com/pbarone/uptime-kuma-api2/pull/77).
 - 13 version-gated monitor fields now use the floor of the Uptime Kuma release
   that added their `monitor` column instead of a blanket `2.0`, so they are
   withheld and reported with `UnsupportedFieldWarning` on servers that lack the
@@ -31,8 +56,11 @@
   Each floor comes from the first Uptime Kuma tag whose `db/knex_migrations/`
   creates the column; the tag and migration per field are recorded next to the
   regression test. Nothing changes on 1.x (the fields were already withheld) or
-  on 2.4.0 and later (every field is still sent). Fixes
-  [#71](https://github.com/pbarone/uptime-kuma-api2/issues/71).
+  on 2.4.0 and later (every field is still sent). Reported, reproduced on real
+  2.0.2 and 2.3.2 servers and fixed by
+  [@Ryan02I5](https://github.com/Ryan02I5) in
+  [#71](https://github.com/pbarone/uptime-kuma-api2/issues/71) and
+  [#72](https://github.com/pbarone/uptime-kuma-api2/pull/72).
 
   Verified on real servers with the new
   `tests/live_test_late_monitor_fields_v2.py`: 2.0.2 rejects all 13 with
@@ -48,6 +76,15 @@
   [@luckman212](https://github.com/luckman212) in
   [#69](https://github.com/pbarone/uptime-kuma-api2/issues/69) and
   [#70](https://github.com/pbarone/uptime-kuma-api2/pull/70).
+
+#### Packaging
+- The `full` job in `test.yml` and the `test` job in `publish.yml` now run on
+  `ubuntu-24.04` instead of `ubuntu-latest`. `ubuntu-latest` moved to Ubuntu
+  26.04, which has no `setup-python` builds for Python 3.8 and 3.9, so
+  `full (3.8)` and `full (3.9)` failed and no PR could merge. Job names are
+  unchanged, so the `protect-main` required checks needed no edit. This is a
+  stopgap, tracked in [#74](https://github.com/pbarone/uptime-kuma-api2/issues/74).
+  See [#73](https://github.com/pbarone/uptime-kuma-api2/pull/73).
 
 #### Tests
 - The live probe `tests/live_test_late_monitor_fields_v2.py` recorded a timed-out
