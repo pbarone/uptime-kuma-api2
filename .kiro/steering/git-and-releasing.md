@@ -126,6 +126,11 @@ This is the same class of drift as the explicit unit-test file list, which has
 bitten this project repeatedly: two places encode the same fact, and only one
 gets updated. Treat a matrix edit as a two-file change.
 
+Dropping or adding a Python version also means editing the protect-main required
+checks in the same change, and the order matters: remove the retired checks
+BEFORE merging the PR that retires them, and add new checks AFTER the first
+green run on main (done for 3.8/3.9/3.14 on 2026-11).
+
 ## CHANGELOG discipline
 
 Every user-facing change gets a `CHANGELOG.md` entry under the release heading,
