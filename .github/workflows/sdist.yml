@@ -8,7 +8,7 @@ name: sdist
 # push; failing there costs a burned version number.
 #
 # Deliberately its own file rather than a job in test.yml: that workflow is
-# slated to be converted to `workflow_call`, and its six `full (3.x)` checks are
+# slated to be converted to `workflow_call`, and its five `full (3.x)` checks are
 # required by name in `protect-main`. Keeping this separate means neither change
 # has to touch the other.
 #
