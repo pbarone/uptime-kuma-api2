@@ -1,6 +1,13 @@
 ## Changelog
 
-### Unreleased
+### Release 2.10.0
+
+A minor release that raises the minimum supported Python to 3.10. Python 3.8
+and 3.9 are end of life; 2.9.1 is the last release that installs there, and pip
+on those versions keeps resolving it. CI now tests Python 3.10 to 3.14, and a
+manual live-verification script for `get_important_heartbeats()` is added. There
+is no library code change and no new public API, and behavior is unchanged on
+every supported Uptime Kuma release, 1.21.3 through 2.5.x.
 
 #### Packaging
 
