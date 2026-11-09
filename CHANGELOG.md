@@ -1,5 +1,18 @@
 ## Changelog
 
+### Unreleased
+
+#### Tests
+- Add `tests/live_test_important_heartbeats.py`, a manual live verification of
+  `get_important_heartbeats()` against a disposable container (1.23.x, 2.0.x or
+  2.5.x), runnable through `scripts/run_disposable_kuma.ps1`. It checks the
+  paged-event call format and row shape on 2.x and that 1.x is unchanged. Its
+  fresh-connection phase fails on the unfixed 2.9.0 library on 2.5.9 (verified),
+  while the same-session phase passes either way, because live heartbeat events
+  fill the cache. Known gap: each monitor produces a single important heartbeat,
+  so ordering and the 500 row cap are barely exercised. Not run by CI or pytest;
+  no library change.
+
 ### Release 2.9.1
 A patch release with three library fixes ([#71](https://github.com/pbarone/uptime-kuma-api2/issues/71),
 [#69](https://github.com/pbarone/uptime-kuma-api2/issues/69),

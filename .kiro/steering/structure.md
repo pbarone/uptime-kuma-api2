@@ -86,6 +86,11 @@ and was one of seven copies that had to be edited in lockstep.
   - `live_test_late_monitor_fields_v2.py` — asserts one of the exact releases
     `2.0.2`, `2.1.0`, `2.3.2`, `2.4.0`, the releases either side of each floor it
     checks. Run once per image, with the same `-DockerEnv` as above.
+  - `live_test_important_heartbeats.py` — asserts `1.23.x`, `2.0.x` or `2.5.x`.
+    A deliberate exception to one version line per script: its assertions branch
+    on 1.x versus 2.x, and the prefix allowlist keeps it failing closed. Same
+    `-DockerEnv` for 2.x. Against an unfixed library on 2.x it is expected to
+    exit 1 in its fresh-connection phase.
 
   The `UPTIME_KUMA_V1_*` key names are historical: they mean "the disposable
   container", whatever version it runs. The runner deliberately offers no way to
