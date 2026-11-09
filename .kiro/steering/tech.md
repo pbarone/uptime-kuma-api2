@@ -6,7 +6,7 @@ inclusion: always
 
 ## Stack
 
-- **Language:** Python 3.8+ (tested 3.8–3.13; matches CI and PyPI classifiers)
+- **Language:** Python 3.10+ (tested 3.10–3.14; matches CI and PyPI classifiers)
 - **Core dependency:** `python-socketio[client]` (the API is Socket.IO, not REST;
   a few endpoints like status-page fetch use `requests` over HTTP)
 - **Version gating:** `packaging.version.parse` — the mechanism for supporting

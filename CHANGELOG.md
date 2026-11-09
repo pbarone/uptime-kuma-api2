@@ -2,6 +2,19 @@
 
 ### Unreleased
 
+#### Packaging
+
+- Python 3.8 and 3.9 are no longer supported. `python_requires` is now `>=3.10`.
+  2.9.1 is the last release that installs on 3.8 and 3.9; pip on those versions
+  keeps resolving it, and existing installs are unaffected. Both versions are end
+  of life (3.8 in Oct 2024, 3.9 in Oct 2025), current `requests` and
+  `websocket-client` already require 3.10+, and GitHub's `ubuntu-latest`
+  (Ubuntu 26.04) has no `setup-python` builds for them. CI now tests 3.10 to
+  3.14 (3.14 added) and the `ubuntu-24.04` pin from #73 is removed. This is a
+  deliberate minor-version change (planned 2.10.0), not a major one, because the
+  floor is enforced by pip and breaks no API or server-compat behavior. Closes
+  [#74](https://github.com/pbarone/uptime-kuma-api2/issues/74).
+
 #### Tests
 - Add `tests/live_test_important_heartbeats.py`, a manual live verification of
   `get_important_heartbeats()` against a disposable container (1.23.x, 2.0.x or

@@ -36,7 +36,7 @@ setup(
     author_email="pbarone@users.noreply.github.com",
     license=info["__license__"],
     packages=["uptime_kuma_api"],
-    python_requires=">=3.8, <4",
+    python_requires=">=3.10, <4",
     install_requires=[
         "python-socketio[client]>=5.0.0",
         # ssl_verify accepts a CA bundle path via socketio.Client(http_session=...).
@@ -62,12 +62,11 @@ setup(
         "Operating System :: OS Independent",
         "Programming Language :: Python",
         "Programming Language :: Python :: 3",
-        "Programming Language :: Python :: 3.8",
-        "Programming Language :: Python :: 3.9",
         "Programming Language :: Python :: 3.10",
         "Programming Language :: Python :: 3.11",
         "Programming Language :: Python :: 3.12",
         "Programming Language :: Python :: 3.13",
+        "Programming Language :: Python :: 3.14",
         "Programming Language :: Python :: 3 :: Only",
         "Topic :: Internet :: WWW/HTTP",
         "Topic :: Software Development :: Libraries"

@@ -144,13 +144,13 @@ on commits you have already pushed, that lands with a `Co-authored-by:` trailer.
    Conventional Commit type of the change's main purpose (so any of the types
    listed above — e.g. `fix/...`, `docs/...`, `chore/...`). Never commit to
    `main`.
-2. Open a PR against `main`; CI runs the full Python 3.8–3.13 matrix.
+2. Open a PR against `main`; CI runs the full Python 3.10–3.14 matrix.
 3. Fill in the PR checklist (tests, changelog, backward-compat, docs).
 4. A maintainer merges after review.
 
 `main` is branch-protected, so steps 1 and 2 are enforced rather than merely
 asked for: a direct push is rejected, a pull request is required, and the full
-Python 3.8–3.13 matrix must report green before the merge button unlocks.
+Python 3.10–3.14 matrix must report green before the merge button unlocks.
 
 ## A note on AI-agent steering files
 
