@@ -468,6 +468,12 @@ notification_provider_options = {
         ntfyPriority=dict(type="int", required=True),
         ntfyserverurl=dict(type="str", required=True),
         ntfyIcon=dict(type="str", required=False),
+        # Read by the Uptime Kuma 2.x provider; 1.x servers ignore them.
+        ntfyPriorityDown=dict(type="int", required=False),
+        ntfyUseTemplate=dict(type="bool", required=False),
+        ntfyCustomTitle=dict(type="str", required=False),
+        ntfyCustomMessage=dict(type="str", required=False),
+        ntfyCall=dict(type="str", required=False),
     ),
     NotificationType.OCTOPUSH: dict(
         octopushVersion=dict(type="str", required=False),
@@ -915,6 +921,10 @@ notification_provider_conditions = dict(
         max=10,
     ),
     ntfyPriority=dict(
+        min=1,
+        max=5,
+    ),
+    ntfyPriorityDown=dict(
         min=1,
         max=5,
     ),

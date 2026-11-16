@@ -95,6 +95,16 @@ data = {
     "ntfyaccesstoken": "Access Token.",
 
     "ntfyAuthenticationMethod": "Authentication Method.",
+
+    "ntfyPriorityDown": "Priority (1-5) for DOWN notifications; ``ntfyPriority`` applies to the others. Uptime Kuma 2.x.",
+
+    "ntfyUseTemplate": "Use ``ntfyCustomTitle`` and ``ntfyCustomMessage``. Uptime Kuma 2.x.",
+
+    "ntfyCustomTitle": "Custom title template, used when ``ntfyUseTemplate`` is set. Uptime Kuma 2.x.",
+
+    "ntfyCustomMessage": "Custom message template, used when ``ntfyUseTemplate`` is set. Uptime Kuma 2.x.",
+
+    "ntfyCall": "Value of the ntfy ``X-Call`` header: ``yes`` or a phone number. Uptime Kuma 2.x.",
 }
 
 for provider in notification_provider_options:

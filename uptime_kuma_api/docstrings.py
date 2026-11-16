@@ -221,6 +221,11 @@ def notification_docstring(mode) -> str:
         :param int, optional ntfyPriority: Notification option for ``type`` :attr:`~.NotificationType.NTFY`.
         :param str, optional ntfyserverurl: Notification option for ``type`` :attr:`~.NotificationType.NTFY`.
         :param str ntfyIcon: Notification option for ``type`` :attr:`~.NotificationType.NTFY`.
+        :param int ntfyPriorityDown: Notification option for ``type`` :attr:`~.NotificationType.NTFY`. Priority (1-5) for DOWN notifications; ``ntfyPriority`` applies to the others. Uptime Kuma 2.x.
+        :param bool ntfyUseTemplate: Notification option for ``type`` :attr:`~.NotificationType.NTFY`. Use ``ntfyCustomTitle`` and ``ntfyCustomMessage``. Uptime Kuma 2.x.
+        :param str ntfyCustomTitle: Notification option for ``type`` :attr:`~.NotificationType.NTFY`. Custom title template, used when ``ntfyUseTemplate`` is set. Uptime Kuma 2.x.
+        :param str ntfyCustomMessage: Notification option for ``type`` :attr:`~.NotificationType.NTFY`. Custom message template, used when ``ntfyUseTemplate`` is set. Uptime Kuma 2.x.
+        :param str ntfyCall: Notification option for ``type`` :attr:`~.NotificationType.NTFY`. Value of the ntfy ``X-Call`` header: ``yes`` or a phone number. Uptime Kuma 2.x.
         :param str octopushVersion: Notification option for ``type`` :attr:`~.NotificationType.OCTOPUSH`.
         :param str, optional octopushAPIKey: Notification option for ``type`` :attr:`~.NotificationType.OCTOPUSH`.
         :param str, optional octopushLogin: Notification option for ``type`` :attr:`~.NotificationType.OCTOPUSH`.
