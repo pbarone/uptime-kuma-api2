@@ -1,6 +1,9 @@
 ## Changelog
 
-### Unreleased
+### Release 2.10.1
+A patch release. `add_notification()` and `test_notification()` now accept the
+ntfy fields the Uptime Kuma 2.x provider reads. Behavior on 1.x servers is
+unchanged.
 
 #### Bugfixes
 - `add_notification()` and `test_notification()` now accept the ntfy fields that
@@ -12,7 +15,9 @@
   `ntfyPriority`. The 1.23.x provider does not read them, so 1.x is unchanged.
   Field names and types follow `server/notification-providers/ntfy.js` and
   `src/components/notifications/Ntfy.vue` at tag 2.5.9. Closes
-  [#82](https://github.com/pbarone/uptime-kuma-api2/issues/82).
+  [#82](https://github.com/pbarone/uptime-kuma-api2/issues/82). Reported and
+  fixed by @Ryan02I5 in
+  [#83](https://github.com/pbarone/uptime-kuma-api2/pull/83).
 
 ### Release 2.10.0
 
