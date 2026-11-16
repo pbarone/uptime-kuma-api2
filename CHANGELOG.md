@@ -1,5 +1,19 @@
 ## Changelog
 
+### Unreleased
+
+#### Bugfixes
+- `add_notification()` and `test_notification()` now accept the ntfy fields that
+  the Uptime Kuma 2.x provider reads: `ntfyPriorityDown`, `ntfyUseTemplate`,
+  `ntfyCustomTitle`, `ntfyCustomMessage` and `ntfyCall`. They raised
+  `TypeError: unknown argument` because the fields were missing from
+  `notification_provider_options`, while `edit_notification()` accepted them.
+  All five are optional; `ntfyPriorityDown` is bounded to 1-5 like
+  `ntfyPriority`. The 1.23.x provider does not read them, so 1.x is unchanged.
+  Field names and types follow `server/notification-providers/ntfy.js` and
+  `src/components/notifications/Ntfy.vue` at tag 2.5.9. Closes
+  [#82](https://github.com/pbarone/uptime-kuma-api2/issues/82).
+
 ### Release 2.10.0
 
 A minor release that raises the minimum supported Python to 3.10. Python 3.8
