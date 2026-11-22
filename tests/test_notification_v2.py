@@ -1419,6 +1419,87 @@ class TestProviders251(unittest.TestCase):
             _check_arguments_notification(data)
 
 
+    # --- SMS Gateway / Amoot SMS / Notify! (Uptime Kuma 2.5.1 / 2.5.4) ---
+
+    def test_smsgateway_valid(self):
+        data = _build_notification_data(
+            name="test",
+            type=NotificationType.SMSGATEWAY,
+            smsgatewayUrl="http://localhost:8080",
+            smsgatewayApiKey="k",
+            smsgatewayTo="+15551234567, +15559876543",
+        )
+        assert data["type"] == "SMSGateway"
+        assert data["smsgatewayTo"] == "+15551234567, +15559876543"
+        _check_arguments_notification(data)
+
+    def test_smsgateway_missing_required(self):
+        data = _build_notification_data(
+            name="test",
+            type=NotificationType.SMSGATEWAY,
+            smsgatewayUrl="http://localhost:8080",
+            smsgatewayApiKey="k",
+        )
+        with self.assertRaises(TypeError):
+            _check_arguments_notification(data)
+
+    def test_amootsms_valid_minimal(self):
+        data = _build_notification_data(
+            name="test",
+            type=NotificationType.AMOOTSMS,
+            amootApiToken="t",
+            amootMobiles="9123456789,09987654321",
+            amootLineNumber="public",
+        )
+        assert data["type"] == "amootsms"
+        _check_arguments_notification(data)
+
+    def test_amootsms_pattern_options_accepted(self):
+        data = _build_notification_data(
+            name="test",
+            type=NotificationType.AMOOTSMS,
+            amootApiToken="t",
+            amootMobiles="9123456789",
+            amootUsePattern=True,
+            amootPatternCodeId=1234,
+            amootUseOwnLine=True,
+            amootLineNumber="public",
+        )
+        assert data["amootPatternCodeId"] == 1234
+        assert data["amootUsePattern"] is True
+        _check_arguments_notification(data)
+
+    def test_amootsms_missing_required(self):
+        data = _build_notification_data(
+            name="test",
+            type=NotificationType.AMOOTSMS,
+            amootApiToken="t",
+        )
+        with self.assertRaises(TypeError):
+            _check_arguments_notification(data)
+
+    def test_notifyapp_valid(self):
+        data = _build_notification_data(
+            name="test",
+            type=NotificationType.NOTIFYAPP,
+            notifyAppDeviceId="ABC12345",
+            notifyAppToken="t",
+            notifyAppIconUrl="https://example.com/i.png",
+        )
+        assert data["type"] == "notifyapp"
+        assert data["notifyAppDeviceId"] == "ABC12345"
+        _check_arguments_notification(data)
+
+    def test_notifyapp_missing_required(self):
+        data = _build_notification_data(
+            name="test",
+            type=NotificationType.NOTIFYAPP,
+            notifyAppDeviceId="ABC12345",
+        )
+        with self.assertRaises(TypeError):
+            _check_arguments_notification(data)
+
+
 class TestAllNewProvidersHaveOptions(unittest.TestCase):
     """Ensure every new provider (2.5.0 and 2.5.1) has an options table entry."""
 
@@ -1466,6 +1547,9 @@ class TestAllNewProvidersHaveOptions(unittest.TestCase):
         NotificationType.TURBOSMTP,
         # Added in Uptime Kuma 2.5.4
         NotificationType.SIGNALGRID,
+        NotificationType.SMSGATEWAY,
+        NotificationType.AMOOTSMS,
+        NotificationType.NOTIFYAPP,
     ]
 
     def test_all_new_providers_have_options_entry(self):

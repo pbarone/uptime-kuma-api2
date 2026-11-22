@@ -322,6 +322,15 @@ class NotificationType(str, Enum):
     SIGNALGRID = "signalgrid"
     """Signalgrid"""
 
+    SMSGATEWAY = "SMSGateway"
+    """SMS Gateway"""
+
+    AMOOTSMS = "amootsms"
+    """Amoot SMS"""
+
+    NOTIFYAPP = "notifyapp"
+    """Notify!"""
+
 
 notification_provider_options = {
     NotificationType.ALERTA: dict(
@@ -912,6 +921,24 @@ notification_provider_options = {
     NotificationType.SIGNALGRID: dict(
         signalgridClientKey=dict(type="str", required=True),
         signalgridChannel=dict(type="str", required=True),
+    ),
+    NotificationType.SMSGATEWAY: dict(
+        smsgatewayUrl=dict(type="str", required=True),
+        smsgatewayApiKey=dict(type="str", required=True),
+        smsgatewayTo=dict(type="str", required=True),
+    ),
+    NotificationType.AMOOTSMS: dict(
+        amootApiToken=dict(type="str", required=True),
+        amootMobiles=dict(type="str", required=True),
+        amootUsePattern=dict(type="bool", required=False),
+        amootPatternCodeId=dict(type="int", required=False),
+        amootUseOwnLine=dict(type="bool", required=False),
+        amootLineNumber=dict(type="str", required=False),
+    ),
+    NotificationType.NOTIFYAPP: dict(
+        notifyAppDeviceId=dict(type="str", required=True),
+        notifyAppToken=dict(type="str", required=True),
+        notifyAppIconUrl=dict(type="str", required=False),
     ),
 }
 
