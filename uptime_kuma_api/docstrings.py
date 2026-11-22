@@ -138,6 +138,12 @@ def monitor_docstring(mode) -> str:
         :param str, optional snmp_v3_username: SNMPv3 username (v2). Defaults to None.
         :param str, optional smtpSecurity: SMTP security mode, "secure", "starttls", or "nostarttls" (v2). Defaults to "starttls".
         :param str, optional system_service_name: System service name (v2). Required for SYSTEM_SERVICE monitors.
+        :param str, optional sshUsername: SSH username (v2.5.4+). Required for SFTP monitors.
+        :param str, optional sshAuthMethod: SFTP authentication method, "password" or "privateKey" (v2.5.4+). The server treats anything other than "privateKey" as password. Defaults to None.
+        :param str, optional sshPassword: SFTP password, used unless sshAuthMethod is "privateKey" (v2.5.4+). Defaults to None.
+        :param str, optional sshPrivateKey: SFTP private key, used when sshAuthMethod is "privateKey" (v2.5.4+). Defaults to None.
+        :param str, optional sshPassphrase: Passphrase for sshPrivateKey (v2.5.4+). Defaults to None.
+        :param str, optional sftpPath: Remote path that must exist for the check to pass (v2.5.4+). Defaults to None.
     """
 
 

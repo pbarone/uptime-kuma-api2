@@ -495,6 +495,32 @@ class MonitorBuilder:
         self._data["ntpRootDispersionThreshold"] = value
         return self
 
+    # ── SFTP ─────────────────────────────────────────────────────────────
+
+    def sshUsername(self, value: str) -> "MonitorBuilder":
+        self._data["sshUsername"] = value
+        return self
+
+    def sshAuthMethod(self, value: str) -> "MonitorBuilder":
+        self._data["sshAuthMethod"] = value
+        return self
+
+    def sshPassword(self, value: str) -> "MonitorBuilder":
+        self._data["sshPassword"] = value
+        return self
+
+    def sshPrivateKey(self, value: str) -> "MonitorBuilder":
+        self._data["sshPrivateKey"] = value
+        return self
+
+    def sshPassphrase(self, value: str) -> "MonitorBuilder":
+        self._data["sshPassphrase"] = value
+        return self
+
+    def sftpPath(self, value: str) -> "MonitorBuilder":
+        self._data["sftpPath"] = value
+        return self
+
     # ── Build ────────────────────────────────────────────────────────────
 
     def build(self) -> dict:
