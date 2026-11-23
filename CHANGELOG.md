@@ -1,5 +1,5 @@
 ## Changelog
-### Unreleased
+### Release 2.11.0
 Adds the SFTP monitor type and three notification providers that Uptime Kuma
 shipped in 2.5.1 and 2.5.4. Behavior on 1.x servers and on 2.x servers older
 than each feature is unchanged.
