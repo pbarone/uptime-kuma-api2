@@ -1,4 +1,11 @@
 ## Changelog
+### Unreleased
+#### Documentation
+- README: the supported Uptime Kuma range is now 1.21.3 - 2.5.12 for 2.11.0.
+  The previous row (1.21.3 - 2.5.0 for 2.3.0 - 2.10.1) moves to the earlier
+  release lines, since those releases lack the 2.5.4 SFTP monitor type. PyPI
+  shows this on the next release, because the project page is the README
+  published with it.
 ### Release 2.11.0
 Adds the SFTP monitor type and three notification providers that Uptime Kuma
 shipped in 2.5.1 and 2.5.4. Behavior on 1.x servers and on 2.x servers older
