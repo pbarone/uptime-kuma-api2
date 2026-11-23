@@ -102,3 +102,6 @@ class MonitorType(str, Enum):
 
     PM2 = "pm2"
     """PM2 Process"""
+
+    SFTP = "sftp"
+    """SFTP"""

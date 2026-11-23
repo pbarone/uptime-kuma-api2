@@ -1,5 +1,18 @@
 ## Changelog
-
+### Release 2.11.0
+Adds the SFTP monitor type and three notification providers that Uptime Kuma
+shipped in 2.5.1 and 2.5.4. Behavior on 1.x servers and on 2.x servers older
+than each feature is unchanged.
+#### Features
+- `MonitorType.SFTP` (Uptime Kuma 2.5.4, louislam/uptime-kuma#7034). New
+  `add_monitor()` / `edit_monitor()` parameters `sshUsername` (required),
+  `sshAuthMethod`, `sshPassword`, `sshPrivateKey`, `sshPassphrase` and
+  `sftpPath`, with matching `MonitorBuilder` setters. `port` defaults to 22. On
+  a server older than 2.5.4 the type is rejected with an `UptimeKumaException`
+  and the fields are withheld with an `UnsupportedFieldWarning`, as for NTP.
+- Notification providers `NotificationType.SMSGATEWAY` (2.5.1), `AMOOTSMS` and
+  `NOTIFYAPP` (both 2.5.4). Field names follow the Vue components at tag 2.5.12.
+  Refs [#85](https://github.com/pbarone/uptime-kuma-api2/issues/85).
 ### Release 2.10.1
 A patch release. `add_notification()` and `test_notification()` now accept the
 ntfy fields the Uptime Kuma 2.x provider reads. Behavior on 1.x servers is

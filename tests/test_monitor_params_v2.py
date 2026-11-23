@@ -2575,6 +2575,7 @@ V2_ONLY_TYPE_CASES = {
     MonitorType.SIP_OPTIONS: dict(hostname="127.0.0.1", port=5060),
     MonitorType.ORACLEDB: dict(databaseConnectionString="localhost:1521/ORCL"),
     MonitorType.NTP: dict(hostname="pool.ntp.org"),
+    MonitorType.SFTP: dict(hostname="127.0.0.1", sshUsername="u"),
 }
 
 # Monitor types that exist on both majors. These must be entirely unaffected by
@@ -2835,7 +2836,7 @@ class TestV2OnlyMonitorTypesPreservation(unittest.TestCase):
 
         **Validates: Requirements 3.1, issue #29**
         """
-        build = self._build_for("2.5.0")
+        build = self._build_for("2.5.4")
         # ``rabbitmqNodes`` is JSON-serialised on the way into the payload, so
         # the expectation records the observed wire value rather than the input.
         expected_companions = {
@@ -2858,6 +2859,7 @@ class TestV2OnlyMonitorTypesPreservation(unittest.TestCase):
                 "databaseConnectionString": "localhost:1521/ORCL",
             },
             MonitorType.NTP: {"hostname": "pool.ntp.org"},
+            MonitorType.SFTP: {"hostname": "127.0.0.1", "sshUsername": "u"},
         }
         for type_, kwargs in V2_ONLY_TYPE_CASES.items():
             with self.subTest(type=type_):
@@ -2979,7 +2981,7 @@ class TestV2OnlyMonitorTypesPreservation(unittest.TestCase):
 # up/down verdict rather than how the check runs.
 # ---------------------------------------------------------------------------
 
-V2_VERSION = "2.5.0"
+V2_VERSION = "2.5.4"
 FLOOR_VERSION = "2.0"
 
 # Minimal kwargs per monitor type. _build_monitor_data does not enforce the
@@ -2996,6 +2998,7 @@ FIELD_TYPE_BASES = {
     },
     MonitorType.SNMP: {"hostname": "127.0.0.1", "snmpOid": "1.3.6"},
     MonitorType.NTP: {"hostname": "pool.ntp.org"},
+    MonitorType.SFTP: {"hostname": "127.0.0.1", "sshUsername": "u"},
 }
 
 # A value for every registry field. Three of them are constrained by the
@@ -3033,6 +3036,12 @@ FIELD_SAMPLE_VALUES = {
     "ntpStratumThreshold": 5,
     "ntpTimeOffsetThreshold": 1000,
     "ntpRootDispersionThreshold": 500,
+    "sshUsername": "u",
+    "sshAuthMethod": "privateKey",
+    "sshPassword": "pw",
+    "sshPrivateKey": "KEY",
+    "sshPassphrase": "pp",
+    "sftpPath": "/data",
 }
 
 # Falsy-but-not-None values. The emission test is `is not None`, so these are
@@ -3989,6 +3998,7 @@ class TestPerTypeVersionFloors(unittest.TestCase):
                 MonitorType.ORACLEDB: "2.3",
                 MonitorType.NTP: "2.5",
                 MonitorType.PM2: "2.5",
+                MonitorType.SFTP: "2.5.4",
             },
         )
 
@@ -4315,5 +4325,86 @@ class TestAuthMethodBearer(unittest.TestCase):
         self.assertNotIn("oauth_client_id", result)
 
 
-if __name__ == "__main__":
-    unittest.main()
+class TestSFTPMonitorType(unittest.TestCase):
+    """SFTP monitor type (Uptime Kuma 2.5.4): type gate, fields, defaults."""
+
+    def _build_at_version(self, version):
+        api = MagicMock(spec=UptimeKumaApi)
+        api.version = version
+        for name in ("_parsed_version", "_withheld_v2_fields",
+                     "_warn_withheld_v2_fields", "_check_conditions_supported",
+                     "_check_monitor_type_supported"):
+            setattr(api, name, getattr(UptimeKumaApi, name).__get__(api))
+        return UptimeKumaApi._build_monitor_data.__get__(api)
+
+    def test_sftp_accepted_on_v2_5_4_with_all_fields(self):
+        result = self._build_at_version("2.5.4")(
+            type=MonitorType.SFTP, name="s", hostname="h",
+            sshUsername="u", sshAuthMethod="privateKey", sshPassword="pw",
+            sshPrivateKey="KEY", sshPassphrase="pp", sftpPath="/data",
+        )
+        self.assertEqual(result["type"], MonitorType.SFTP)
+        self.assertEqual(result["sshUsername"], "u")
+        self.assertEqual(result["sshAuthMethod"], "privateKey")
+        self.assertEqual(result["sshPassword"], "pw")
+        self.assertEqual(result["sshPrivateKey"], "KEY")
+        self.assertEqual(result["sshPassphrase"], "pp")
+        self.assertEqual(result["sftpPath"], "/data")
+
+    def test_sftp_default_port_22(self):
+        result = self._build_at_version("2.5.4")(
+            type=MonitorType.SFTP, name="s", hostname="h", sshUsername="u")
+        self.assertEqual(result["port"], 22)
+
+    def test_sftp_custom_port_respected(self):
+        result = self._build_at_version("2.5.4")(
+            type=MonitorType.SFTP, name="s", hostname="h", sshUsername="u",
+            port=2222)
+        self.assertEqual(result["port"], 2222)
+
+    def test_sftp_optional_fields_omitted_when_none(self):
+        result = self._build_at_version("2.5.4")(
+            type=MonitorType.SFTP, name="s", hostname="h", sshUsername="u")
+        for name in ("sshAuthMethod", "sshPassword", "sshPrivateKey",
+                     "sshPassphrase", "sftpPath"):
+            self.assertNotIn(name, result)
+
+    def test_sftp_requires_hostname_and_username(self):
+        from uptime_kuma_api.api import _check_arguments_monitor
+        build = self._build_at_version("2.5.4")
+        ok = build(type=MonitorType.SFTP, name="s", hostname="h",
+                   sshUsername="u")
+        _check_arguments_monitor(ok)
+        for missing in ("hostname", "sshUsername"):
+            with self.subTest(missing=missing):
+                with self.assertRaises(TypeError):
+                    _check_arguments_monitor(dict(ok, **{missing: None}))
+
+    def test_sftp_rejected_on_2_5_3(self):
+        """2.5.3 is the last release without the sftp monitor type."""
+        with self.assertRaises(UptimeKumaException) as ctx:
+            self._build_at_version("2.5.3")(
+                type=MonitorType.SFTP, name="s", hostname="h", sshUsername="u")
+        self.assertIn("sftp", str(ctx.exception))
+        self.assertIn("2.5.4", str(ctx.exception))
+
+    def test_sftp_rejected_on_v1(self):
+        with self.assertRaises(UptimeKumaException):
+            self._build_at_version("1.23.2")(
+                type=MonitorType.SFTP, name="s", hostname="h", sshUsername="u")
+
+    def test_ssh_fields_not_emitted_for_other_types(self):
+        result = self._build_at_version("2.5.4")(
+            type=MonitorType.HTTP, name="t", url="http://example.com",
+            sshUsername="u", sshPassword="pw", sftpPath="/x")
+        for name in ("sshUsername", "sshPassword", "sftpPath"):
+            self.assertNotIn(name, result)
+
+    def test_v1_http_monitor_unaffected(self):
+        result = self._build_at_version("1.23.2")(
+            type=MonitorType.HTTP, name="t", url="http://example.com")
+        self.assertNotIn("sshUsername", result)
+        self.assertNotIn("sftpPath", result)
+
+
+if __name__ == "__main__":    unittest.main()

@@ -85,6 +85,9 @@ _V2_ONLY_MONITOR_TYPES = {
     MonitorType.NTP: "2.5",
     # louislam/uptime-kuma 2.5.0; absent at 2.4.1.
     MonitorType.PM2: "2.5",
+    # louislam/uptime-kuma#7034, first in 2.5.4 (release notes); absent from the
+    # 2.5.0 - 2.5.3 monitor-type list.
+    MonitorType.SFTP: "2.5.4",
 }
 
 
@@ -180,6 +183,13 @@ _V2_ONLY_MONITOR_FIELDS = {
     "ntpStratumThreshold": _FieldRule("2.5", frozenset({MonitorType.NTP}), _WITHHOLD),
     "ntpTimeOffsetThreshold": _FieldRule("2.5", frozenset({MonitorType.NTP}), _WITHHOLD),
     "ntpRootDispersionThreshold": _FieldRule("2.5", frozenset({MonitorType.NTP}), _WITHHOLD),
+
+    "sshUsername": _FieldRule("2.5.4", frozenset({MonitorType.SFTP}), _WITHHOLD),
+    "sshAuthMethod": _FieldRule("2.5.4", frozenset({MonitorType.SFTP}), _WITHHOLD),
+    "sshPassword": _FieldRule("2.5.4", frozenset({MonitorType.SFTP}), _WITHHOLD),
+    "sshPrivateKey": _FieldRule("2.5.4", frozenset({MonitorType.SFTP}), _WITHHOLD),
+    "sshPassphrase": _FieldRule("2.5.4", frozenset({MonitorType.SFTP}), _WITHHOLD),
+    "sftpPath": _FieldRule("2.5.4", frozenset({MonitorType.SFTP}), _WITHHOLD),
 }
 
 
@@ -456,6 +466,7 @@ def _check_arguments_monitor(kwargs) -> None:
         MonitorType.SYSTEM_SERVICE: ["system_service_name"],
         MonitorType.PM2: ["system_service_name"],
         MonitorType.NTP: ["hostname"],
+        MonitorType.SFTP: ["hostname", "sshUsername"],
         MonitorType.ORACLEDB: ["databaseConnectionString"],
     }
     type_ = kwargs["type"]
@@ -1346,6 +1357,14 @@ class UptimeKumaApi(object):
             ntpStratumThreshold: int = None,
             ntpTimeOffsetThreshold: int = None,
             ntpRootDispersionThreshold: int = None,
+
+            # SFTP
+            sshUsername: str = None,
+            sshAuthMethod: str = None,
+            sshPassword: str = None,
+            sshPrivateKey: str = None,
+            sshPassphrase: str = None,
+            sftpPath: str = None,
     ) -> dict:
         if accepted_statuscodes is None:
             accepted_statuscodes = ["200-299"]
@@ -1490,6 +1509,8 @@ class UptimeKumaApi(object):
                 port = 25
             elif type == MonitorType.NTP:
                 port = 123
+            elif type == MonitorType.SFTP:
+                port = 22
         data.update({
             "port": port,
         })
