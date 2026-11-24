@@ -1,5 +1,6 @@
 ## Changelog
-### Unreleased
+### Release 2.11.1
+A patch release. Against an Uptime Kuma 3.x server, the auth methods now fail at once with a clear error instead of a timeout. Behavior on 1.x and 2.x servers is unchanged. Uptime Kuma 3.x itself is not supported by this release line; see [#88](https://github.com/pbarone/uptime-kuma-api2/issues/88).
 #### Bugfixes
 - Against an Uptime Kuma 3.x server, `login()`, `login_by_token()` and `setup()` now raise `UptimeKumaException` saying the server is Uptime Kuma 3.x and pointing to `uptime-kuma-api2>=3`. Before, they waited out the full timeout and raised an empty `Timeout`, because Uptime Kuma 3.0 removed the socket.io `login`, `loginByToken` and `setup` events. The check is one `GET /api/auth/ok` request per client, made on the first of these calls: 3.x answers JSON `{"ok": true}`, while 1.x and 2.x serve the web UI's HTML there. Any other answer, including a network error, keeps the previous behavior, so 1.x and 2.x servers are unaffected. A 3.x connection authenticated without `login()` (an API-key header, or `disableAuth`) is not checked. Closes [#89](https://github.com/pbarone/uptime-kuma-api2/issues/89).
 #### Documentation
