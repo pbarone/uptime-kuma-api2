@@ -2818,7 +2818,7 @@ class UptimeKumaApi(object):
         :param bool, optional published: Published, defaults to True
         :param bool, optional showTags: Show Tags, defaults to False
         :param list, optional domainNameList: Domain Names, defaults to None
-        :param str, optional googleAnalyticsId: Google Analytics ID, defaults to None
+        :param str, optional googleAnalyticsId: Accepted and ignored. Uptime Kuma 2.1 and later replaced it with `analyticsType` and `analyticsId`. Defaults to None
         :param str, optional customCSS: Custom CSS, defaults to ""
         :param str, optional footerText: Custom Footer, defaults to None
         :param bool, optional showPoweredBy: Show Powered By, defaults to True
