@@ -1,7 +1,7 @@
 #!/bin/bash
 #
-# Runs the full inherited integration suite against throwaway Uptime Kuma
-# containers, one server version at a time.
+# Runs the full inherited integration suite against a throwaway Uptime Kuma
+# container.
 #
 # DISPOSABLE LOCAL DOCKER HOST ONLY. This script binds host port 3001 and
 # claims the container name "uptimekuma", so it will collide with any Uptime
@@ -12,7 +12,13 @@
 # destroys, and it is why the target must never be a server you care about.
 #
 # Usage: ./run_tests.sh [uptime-kuma-version]
-#   With no argument, iterates the matrix below.
+#   With no argument, runs the single version in the matrix below.
+#
+# Known limitation on the v3 branch: this suite cannot pass until the
+# authentication change lands. Uptime Kuma 3.x moved login from the socket.io
+# login event to HTTP, and the library does not speak that yet, so the suite
+# fails at login. The 3.x image may also need database environment variables
+# that this script does not set. Both are left for that change.
 #
 # Requires bash: uses arrays and [[ ]]. Do not switch the shebang back to sh.
 
@@ -21,13 +27,8 @@ if [ -n "$version" ]
 then
   versions=("$version")
 else
-  # 2.5.0  - current release; the version this tree is live-verified against
-  # 2.1.0  - the incident -> incidents status page rename boundary
-  # 2.0.0  - first version on the >= 2.0 gate path
-  # 1.23.x / 1.22.x - the 1.23 and 1.22 gate boundaries
-  # 1.21.3 - oldest supported server; the pre-1.22 payload path, which is the
-  #          one most at risk of silent regression
-  versions=(2.5.0 2.1.0 2.0.0 1.23.2 1.23.0 1.22.1 1.22.0 1.21.3)
+  # 3.0.0-beta.2 - the Uptime Kuma 3.x line this branch supports
+  versions=(3.0.0-beta.2)
 fi
 
 for version in "${versions[@]}"
