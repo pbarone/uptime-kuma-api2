@@ -13,7 +13,7 @@ license. **Import package:** `uptime_kuma_api` (never rename it). **PyPI name:**
 
 ## Non-negotiables
 
-- **This branch supports Uptime Kuma 3.x only.** This is the `v3` branch: the Uptime Kuma 3.x line during the Uptime Kuma 3.0 beta ([#88](https://github.com/pbarone/uptime-kuma-api2/issues/88)). Uptime Kuma 1.x and 2.x are supported by the 2.x line on `main` (`uptime-kuma-api2<3`), where backward compatibility with 1.x stays sacred. Here the support floor is Uptime Kuma 3.0: don't add code paths for 1.x or 2.x servers, and gate behavior that differs between 3.x releases behind `parse_version(self.version)`. Public method names, arguments and return shapes are still a contract for callers, so keep them where Uptime Kuma 3.x allows it.
+- **This branch supports Uptime Kuma 3.x only.** This is the `v3` branch: the Uptime Kuma 3.x line during the Uptime Kuma 3.0 beta ([#88](https://github.com/pbarone/uptime-kuma-api2/issues/88)). Uptime Kuma 1.x and 2.x are supported by the 2.x line on `main` (`uptime-kuma-api2<3`), where backward compatibility with 1.x stays sacred. Here the support floor is Uptime Kuma 3.0: don't add code paths for 1.x or 2.x servers, and gate behavior that differs between 3.x releases behind `parse_version(self.version)`. On `v3` a public method name, argument or return shape is kept only when it maps naturally onto Uptime Kuma 3.x, and each break is listed under BREAKING CHANGES in `CHANGELOG.md`. The no-removal and no-rename rule applies to the 2.x line on `main`.
 - **`pytest -m integration` deletes all data on the instance it reaches.** The
   inherited integration tests wipe every monitor, notification, proxy, tag,
   status page, docker host, maintenance and API key during setup. `pytest.ini`

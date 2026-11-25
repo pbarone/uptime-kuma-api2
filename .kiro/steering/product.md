@@ -25,7 +25,7 @@ incorporated PR authors.
 
 **On this branch: Uptime Kuma 3.x only.** This is the `v3` branch: the Uptime Kuma 3.x line during the Uptime Kuma 3.0 beta ([#88](https://github.com/pbarone/uptime-kuma-api2/issues/88)). The library supports Uptime Kuma 3.0 and later. Uptime Kuma 1.x and 2.x are supported by the 2.x line on `main` (`uptime-kuma-api2<3`), and the backward-compatibility rule for 1.x lives there. Connecting to a server older than 3.0 raises a clear error that points to `uptime-kuma-api2<3`.
 
-Behavior that differs between 3.x releases is gated behind `parse_version(self.version)`, so older 3.x servers keep working when a later 3.x release adds a field. The public API (method names, arguments, return shapes) is still a contract for callers, including the Ansible collection: keep it stable wherever Uptime Kuma 3.x allows it. See the policy in coding-standards steering before altering any public behavior.
+Behavior that differs between 3.x releases is gated behind `parse_version(self.version)`, so older 3.x servers keep working when a later 3.x release adds a field. On `v3` a public method name, argument or return shape is kept only when it maps naturally onto Uptime Kuma 3.x. It is dropped or changed when keeping it would cost extra code or extra server calls, or would misdescribe what the 3.x server does, and each such break is listed under BREAKING CHANGES in `CHANGELOG.md`. The rule that public names are never removed or renamed applies to the 2.x line on `main`, not to `v3`. See the policy in coding-standards steering before altering any public behavior.
 
 The code paths for 1.x and 2.x servers (the pre-1.22 payload path and the `1.22`, `1.23`, `1.23.1` and `2.0` gates) are removed on this branch. They are kept on `main`.
 
@@ -33,4 +33,4 @@ The code paths for 1.x and 2.x servers (the pre-1.22 payload path and the `1.22`
 
 Users automate Uptime Kuma configuration (often via the companion Ansible
 collection). They depend on stable public method signatures and return shapes.
-Treat the public API as a contract.
+On `main` treat the public API as a contract. On `v3` it follows the rule above: kept where it maps naturally onto Uptime Kuma 3.x, with every break listed under BREAKING CHANGES.
