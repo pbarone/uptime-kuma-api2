@@ -51,6 +51,10 @@ jobs:
         with:
           python-version: "3.11"
 
+      # A literal string comparison, so pre-releases work as long as both sides
+      # use the PEP 440 normalized spelling: tag v3.0.0b1 with __version__
+      # "3.0.0b1". Spellings like 3.0.0-beta.1 normalize to 3.0.0b1 in the
+      # built filenames, so they would not match and the job stops here.
       - name: Verify tag matches __version__
         run: |
           tag="${GITHUB_REF_NAME#v}"

@@ -99,6 +99,8 @@ Two rulesets exist, both with **empty bypass lists** and
 
 `protect-main` targets the default branch with `pull_request` (0 required
 approvals), `required_status_checks`, `deletion` and `non_fast_forward`.
+
+It also targets `refs/heads/v3`, the Uptime Kuma 3.x line during the 3.0 beta (see the section below). Adding the branch to this ruleset rather than creating a second one is deliberate: the five required check names stay in one place, so the drift coupling below is still a one-ruleset change.
 `protect-release-tags` is covered under "Publishing is irreversible" below.
 
 If CI is ever broken for reasons unrelated to the change you need to land, the
@@ -130,6 +132,24 @@ Dropping or adding a Python version also means editing the protect-main required
 checks in the same change, and the order matters: remove the retired checks
 BEFORE merging the PR that retires them, and add new checks AFTER the first
 green run on main (done for 3.8/3.9/3.14 on 2026-11).
+
+## The v3 branch (Uptime Kuma 3.x line, during the 3.0 beta)
+
+Tracked in [#88](https://github.com/pbarone/uptime-kuma-api2/issues/88). While Uptime Kuma 3.0 is in beta, `main` stays the 2.x line (Uptime Kuma 1.x and 2.x) and `v3` holds the 3.x work (Uptime Kuma 3.x only). When Uptime Kuma 3.0.0 final ships, a `v2` branch is created from `main`, `v3` is merged into `main`, and `main` becomes the 3.x line.
+
+- Work for 3.x goes on `<type>/<desc>` branches with PRs into `v3`, not into `main`. CI runs the full matrix for PRs into `v3` and for pushes to it.
+- Merge `main` into `v3` regularly with a normal merge commit, so 2.x fixes carry over. Never rebase or force-push `v3`. `v3` removes the 1.x/2.x code paths early, so a 2.x fix that touches removed code is carried over by hand instead of merged as is.
+- The backward-compatibility rules for 1.x and 2.x in the other steering files apply to `main`. On `v3` the support floor is Uptime Kuma 3.0, and the steering on `v3` says so.
+
+### Beta releases from v3
+
+Betas are PyPI pre-releases, which pip installs only when asked with `--pre`, so users of the 2.x line are not affected.
+
+1. Set `__version__` to the PEP 440 normalized spelling, for example `3.0.0b1`. The publish workflow compares the tag and `__version__` as literal strings, and the built filenames use the normalized form, so `3.0.0-beta.1` would fail the check.
+2. Land the bump on `v3` through a PR and confirm the full matrix is green on the `v3` commit you will tag.
+3. Tag that commit `v3.0.0b1` and push the tag. The same `protect-release-tags` rules apply: the tag can't be moved or deleted.
+4. Create the GitHub release with `--prerelease`, so the repository's latest release stays the newest 2.x release.
+5. Update the README support table on `v3` only. PyPI shows a pre-release's README on that version's page and keeps the latest stable release as the project page.
 
 ## CHANGELOG discipline
 
@@ -187,7 +207,7 @@ That moves the point of no return earlier and raises the stakes on the pre-tag
 checks. Before `git push origin vX.Y.Z`, confirm both:
 
 - `__version__.py` matches the tag you are about to push, exactly.
-- `main` is green — the full matrix, on the commit you are tagging.
+- The branch you are tagging is green: the full matrix, on the commit you are tagging. That is `main` for releases and `v3` for 3.x betas.
 
 ## Secrets
 
