@@ -3,3 +3,4 @@ pyotp==2.9.0
 Jinja2==3.1.6
 BeautifulSoup4==4.12.3
 python-dotenv==1.2.2
+hypothesis
