@@ -169,9 +169,9 @@ class TestNotificationProvidersV2(unittest.TestCase):
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
 
-# Canonical auth-note phrase for #60/#73. The haystack and the needle are both
-# lowercased and stripped of quote/backtick characters before matching, so any
-# quoting style around "API key" is accepted, but the wording must match.
+# Stale 2.x auth-note phrase for #60/#73, which must no longer appear in the
+# docs. Text is lowercased and stripped of quote/backtick characters before
+# matching, so quoting style does not matter.
 AUTH_NOTE_PHRASE = 'UI "API key" cannot authenticate this socket.io API'
 AUTH_NOTE_METRICS_HINT = "/metrics"
 
@@ -320,39 +320,39 @@ class TestBugFDocsAndMetadata(unittest.TestCase):
 
     # ─── Docs: #60/#73 auth note ───────────────────────────────────────────
 
-    def test_auth_note_states_ui_api_key_cannot_authenticate(self):
+    def test_auth_note_documents_bearer_header_login(self):
         """
-        The docs state the UI "API key" cannot authenticate this API (#60/#73).
+        The docs describe the v3 API key login and the legacy-key limit (#60/#73).
 
-        Uptime Kuma UI API keys are ``/metrics``-only, so they cannot be used to
-        authenticate this socket.io API. The note may live in the
-        ``UptimeKumaApi`` class docstring, the ``login`` docstring or README.
+        On Uptime Kuma 3.x a key created on 3.x authenticates the socket through
+        an ``Authorization: Bearer`` header when "API and MCP" (``apiEnabled``)
+        is on; keys carried over from 2.x only work on ``/metrics``. The old
+        2.x statement that the UI key cannot authenticate must be gone.
 
-        **Validates: Requirements 1.11, 2.12**
+        **Validates: Requirements 13.3**
         """
         readme = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
-        haystacks = {
+        login_doc = UptimeKumaApi.login.__doc__ or ""
+
+        for where, text in {"login docstring": login_doc, "README.md": readme}.items():
+            norm = _normalise(text)
+            for fact in (
+                "authorization: bearer",
+                "api and mcp",
+                "carried over from uptime kuma 2.x",
+                AUTH_NOTE_METRICS_HINT,
+            ):
+                self.assertIn(fact, norm, f"{where} does not mention {fact!r}")
+        self.assertIn("apienabled", _normalise(login_doc))
+
+        old = _normalise(AUTH_NOTE_PHRASE)
+        for where, text in {
             "UptimeKumaApi class docstring": _class_docstring(),
-            "login docstring": UptimeKumaApi.login.__doc__ or "",
+            "login docstring": login_doc,
             "login_by_token docstring": UptimeKumaApi.login_by_token.__doc__ or "",
             "README.md": readme,
-        }
-        needle = _normalise(AUTH_NOTE_PHRASE)
-
-        matches = [
-            where for where, text in haystacks.items() if needle in _normalise(text)
-        ]
-        self.assertTrue(
-            matches,
-            f"auth note {AUTH_NOTE_PHRASE!r} not found in any of: "
-            f"{', '.join(haystacks)}",
-        )
-        for where in matches:
-            self.assertIn(
-                AUTH_NOTE_METRICS_HINT,
-                haystacks[where],
-                f"auth note in {where} does not mention {AUTH_NOTE_METRICS_HINT}",
-            )
+        }.items():
+            self.assertNotIn(old, _normalise(text), f"stale 2.x note in {where}")
 
 
 class TestBugFPreservation(unittest.TestCase):

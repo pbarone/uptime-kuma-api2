@@ -1,7 +1,8 @@
 <#
 .SYNOPSIS
-    Run a live_test_* script against a throwaway Uptime Kuma container on a
-    remote Docker host, then destroy the container.
+    Run a live_test_* script against a throwaway Uptime Kuma container, on a
+    remote Docker host (default) or on local Docker (-Local), then destroy the
+    container.
 
 .DESCRIPTION
     Some verification can only be done against a real server: what a server does
@@ -13,7 +14,7 @@
     1. The container is destroyed in a finally block, including on the path where
        the script raised or readiness timed out. A forgotten container on a shared
        host holding a bound port is the failure mode this prevents.
-    2. The Docker host address and SSH user are read from the gitignored root
+    2. In the default (remote) mode the Docker host address and SSH user are read from the gitignored root
        .env and are NEVER printed. Every line of output passes through a
        sanitizer that replaces them with the <docker-host> and <user>
        placeholders, so a captured transcript can be pasted into an issue or a
@@ -47,6 +48,12 @@
     How long to wait for the container to answer before giving up. Defaults to
     120. On timeout the container is removed and the runner exits non-zero.
 
+.PARAMETER Local
+    Run the container on the local Docker instead of the SSH Docker host. The
+    port is published as 127.0.0.1:<Port>:3001, so it is reachable only from this
+    machine, and the URL handed to the script is http://127.0.0.1:<Port>/. The
+    root .env is not read. Without this switch behavior is unchanged.
+
 .PARAMETER KeepContainer
     Leave the container running after the script finishes, for debugging. You are
     then responsible for removing it. The name is printed so you can.
@@ -62,9 +69,20 @@
     until a database type is chosen, so the client hangs on the handshake while
     HTTP answers 200. Pass -DockerEnv UPTIME_KUMA_DB_TYPE=sqlite for such an
     image, and have the script under test retry its first connection.
+.EXAMPLE
+    pwsh -File scripts/run_disposable_kuma.ps1 -Local -Script tests/live_test_<name>.py -DockerEnv UPTIME_KUMA_DB_TYPE=sqlite
+    Same, on local Docker bound to 127.0.0.1. The sqlite value is the fix for a
+    first boot that shows the "setup-database" screen.
+.EXAMPLE
+    pwsh -Command "& scripts/run_disposable_kuma.ps1 -Local -Script tests/live_test_<name>.py -DockerEnv @('UPTIME_KUMA_DB_TYPE=sqlite','UPTIME_KUMA_DISABLE_LEAK_PWD_CHECK=1')"
+    Two or more -DockerEnv values. Under pwsh -File only the first value binds
+    to -DockerEnv and the second is bound positionally to -Name, so use the
+    -Command array form above. 3.0.0-beta.2 needs
+    UPTIME_KUMA_DISABLE_LEAK_PWD_CHECK=1 for a throwaway test password.
 .NOTES
-    Requires the root .env to define DOCKER-HOST and DOCKER-USER, key-based SSH
-    to that host, and Docker on it. This is maintainer tooling: scripts/ ships in
+    Remote mode requires the root .env to define DOCKER-HOST and DOCKER-USER,
+    key-based SSH to that host, and Docker on it. -Local requires only a working
+    local docker CLI (Linux containers). This is maintainer tooling: scripts/ ships in
     neither the wheel nor the sdist, and CI never runs it.
 
     Output is ASCII only. The Windows console defaults to cp1252 and raises
@@ -103,6 +121,7 @@ param(
     [string]$Username = 'admin',
     [string]$Password,
     [int]$TimeoutSeconds = 120,
+    [switch]$Local,
     [switch]$KeepContainer,
     [string]$Python = '.venv\Scripts\python.exe'
 )
@@ -136,22 +155,24 @@ if ($Port -eq 3001) {
     exit 1
 }
 
-if (-not (Test-Path '.env')) {
+if (-not $Local -and -not (Test-Path '.env')) {
     Write-Output "FAIL: no .env at the repository root."
     Write-Output "      It must define DOCKER-HOST and DOCKER-USER. It is gitignored."
     exit 1
 }
 
 $vals = @{}
-Get-Content '.env' | Where-Object { $_ -match '=' } | ForEach-Object {
-    $parts = $_ -split '=', 2
-    $vals[$parts[0].Trim()] = $parts[1].Trim()
+if (-not $Local) {
+    Get-Content '.env' | Where-Object { $_ -match '=' } | ForEach-Object {
+        $parts = $_ -split '=', 2
+        $vals[$parts[0].Trim()] = $parts[1].Trim()
+    }
 }
 
 $dockerHost = $vals['DOCKER-HOST']
 $dockerUser = $vals['DOCKER-USER']
 
-if (-not $dockerHost -or -not $dockerUser) {
+if (-not $Local -and (-not $dockerHost -or -not $dockerUser)) {
     Write-Output "FAIL: DOCKER-HOST and/or DOCKER-USER missing from .env"
     exit 1
 }
@@ -165,6 +186,17 @@ if (-not $Password) {
     $Password = -join (1..20 | ForEach-Object { $chars | Get-Random })
 }
 
+if ($Local) {
+    # Bound to loopback only; the address is not secret and needs no hiding.
+    $dockerHost = '127.0.0.1'
+    $publish = "127.0.0.1:${Port}:3001"
+    $hideTarget = $false
+}
+else {
+    $publish = "${Port}:3001"
+    $hideTarget = $true
+}
+
 $sshTarget = "$dockerUser@$dockerHost"
 
 # ---------------------------------------------------------------------------
@@ -172,7 +204,7 @@ $sshTarget = "$dockerUser@$dockerHost"
 # ---------------------------------------------------------------------------
 
 function Hide-Target([string]$text) {
-    if (-not $text) { return $text }
+    if (-not $text -or -not $hideTarget) { return $text }
     $text = $text -replace [regex]::Escape($dockerHost), '<docker-host>'
     $text = $text -replace [regex]::Escape($dockerUser), '<user>'
     return $text
@@ -187,6 +219,13 @@ function Invoke-Remote([string]$command) {
         $sshTarget $command 2>&1
 }
 
+# Local mode runs docker directly with an argument list (no shell parsing, so no
+# quoting concerns). Remote mode builds one shell command string for ssh.
+function Invoke-Docker([string[]]$DockerArgs, [string]$RemoteCommand) {
+    if ($Local) { & docker @DockerArgs 2>&1 }
+    else { Invoke-Remote $RemoteCommand }
+}
+
 # ---------------------------------------------------------------------------
 # Run
 # ---------------------------------------------------------------------------
@@ -194,7 +233,8 @@ function Invoke-Remote([string]$command) {
 Write-Output "== disposable Uptime Kuma =="
 Write-Output "  image     $Image"
 Write-Output "  container $Name"
-Write-Output "  address   http://<docker-host>:$Port/"
+if ($Local) { Write-Output "  address   http://127.0.0.1:$Port/" }
+else { Write-Output "  address   http://<docker-host>:$Port/" }
 Write-Output "  script    $Script"
 if ($DockerEnv.Count -gt 0) {
     # Names only. A value could be anything and this line is not sanitized for
@@ -208,6 +248,7 @@ Write-Output "== starting =="
 # rm -f first so a container left behind by an interrupted earlier run does not
 # make this one fail on the name.
 $envArgs = ''
+$localEnvArgs = @()
 foreach ($pair in $DockerEnv) {
     if ($pair -notmatch '=') {
         Write-Output "FAIL: -DockerEnv entries must be KEY=VALUE; got '$pair'"
@@ -218,8 +259,10 @@ foreach ($pair in $DockerEnv) {
     $key, $value = $pair -split '=', 2
     $escaped = $value -replace "'", "'\''"
     $envArgs += " -e '$key=$escaped'"
+    $localEnvArgs += @('-e', "$key=$value")
 }
-Write-Clean (Invoke-Remote "docker rm -f $Name 2>/dev/null; docker run -d --name $Name -p ${Port}:3001$envArgs $Image")
+if ($Local) { & docker rm -f $Name 2>&1 | Out-Null }
+Write-Clean (Invoke-Docker (@('run', '-d', '--name', $Name, '-p', $publish) + $localEnvArgs + @($Image)) "docker rm -f $Name 2>/dev/null; docker run -d --name $Name -p $publish$envArgs $Image")
 if ($LASTEXITCODE -ne 0) {
     Write-Output "FAIL: could not start the container (ssh/docker exit $LASTEXITCODE)"
     exit 1
@@ -278,11 +321,12 @@ finally {
     Write-Output ""
     if ($KeepContainer) {
         Write-Output "== keeping $Name as requested =="
-        Write-Output "  remove it with: ssh <user>@<docker-host> 'docker rm -f $Name'"
+        if ($Local) { Write-Output "  remove it with: docker rm -f $Name" }
+        else { Write-Output "  remove it with: ssh <user>@<docker-host> 'docker rm -f $Name'" }
     }
     else {
         Write-Output "== removing $Name =="
-        Write-Clean (Invoke-Remote "docker rm -f $Name")
+        Write-Clean (Invoke-Docker @('rm', '-f', $Name) "docker rm -f $Name")
     }
 }
 

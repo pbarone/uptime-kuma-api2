@@ -116,11 +116,13 @@ question a repository can answer.
 
 ## Disposable test containers
 
-This workstation has no Docker. Disposable Uptime Kuma containers run on a
-separate host reached over SSH; its address and SSH user are recorded in the
-**gitignored** root `.env` as `DOCKER-HOST` / `DOCKER-USER`. Read them from
-there. They contain hyphens, so they are recorded values rather than consumable
-shell variables.
+This workstation has Docker Desktop (Linux containers), so disposable Uptime
+Kuma containers can run locally: pass `-Local` to
+`scripts/run_disposable_kuma.ps1`, which publishes the port on `127.0.0.1` only.
+The separate SSH Docker host remains an option and is the runner's default
+without `-Local`. Its address and SSH user are recorded in the **gitignored**
+root `.env` as `DOCKER-HOST` / `DOCKER-USER`. Read them from there. They contain
+hyphens, so they are recorded values rather than consumable shell variables.
 
 **Never write that address, the SSH user, or any credential into a tracked
 file.** It has been scrubbed from this repo's history once already and is

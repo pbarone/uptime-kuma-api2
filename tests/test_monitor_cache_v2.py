@@ -142,11 +142,10 @@ def make_guard_api(guard, stale_cache, fresh_cache):
     return api, guard_func.__get__(api)
 
 
-# The six events _get_event_data short-circuits to [] when the cached monitor
+# The five events _get_event_data short-circuits to [] when the cached monitor
 # list is the {} "server has zero monitors" sentinel (api.py, _get_event_data).
 MONITOR_SCOPED_EVENTS = (
-    Event.AVG_PING,
-    Event.UPTIME,
+    Event.STATS,
     Event.HEARTBEAT_LIST,
     Event.IMPORTANT_HEARTBEAT_LIST,
     Event.CERT_INFO,
@@ -168,14 +167,11 @@ def initial_event_data():
         Event.STATUS_PAGE_LIST: None,
         Event.HEARTBEAT_LIST: None,
         Event.IMPORTANT_HEARTBEAT_LIST: None,
-        Event.AVG_PING: None,
-        Event.UPTIME: None,
         Event.INFO: None,
         Event.CERT_INFO: None,
         Event.DOCKER_HOST_LIST: None,
-        Event.AUTO_LOGIN: None,
         Event.MAINTENANCE_LIST: None,
-        Event.API_KEY_LIST: None,
+        Event.STATS: None,
     }
 
 

@@ -6,10 +6,12 @@ import os
 import random
 import string
 import time
+import urllib.request
 import warnings
 from collections import namedtuple
 from contextlib import contextmanager
 from copy import deepcopy
+from http.cookiejar import eff_request_host
 from typing import Any, Union
 
 import requests
@@ -163,6 +165,21 @@ def int_to_bool(data, keys) -> None:
                 data[key] = True if data[key] == 1 else False
 
 
+def _api_key_status(active: bool, expires) -> str:
+    # The server no longer sends a status, so derive it: expired wins over
+    # active/inactive. An unparseable expiry is treated as not expired.
+    if expires:
+        try:
+            when = datetime.datetime.fromisoformat(str(expires).replace("Z", "+00:00"))
+            if when.tzinfo is None:
+                when = when.replace(tzinfo=datetime.timezone.utc)
+            if when < datetime.datetime.now(datetime.timezone.utc):
+                return "expired"
+        except ValueError:
+            pass
+    return "active" if active else "inactive"
+
+
 def parse_value(data, key, type_, default=None) -> None:
     if not data:
         return
@@ -222,6 +239,18 @@ def parse_proxy_protocol(data) -> None:
 def gen_secret(length: int) -> str:
     chars = string.ascii_uppercase + string.ascii_lowercase + string.digits
     return ''.join(random.choice(chars) for _ in range(length))
+
+
+# The eleven fields of CompactMonitor in server/compact-monitor.ts (Uptime Kuma
+# 3.0.0-beta.2), which is all the login-time monitorList carries.
+_COMPACT_MONITOR_FIELDS = (
+    "id", "name", "type", "active", "parent", "childrenIDs",
+    "tags", "path", "pathName", "interval", "weight",
+)
+
+
+def _to_compact_monitor(monitor: dict) -> dict:
+    return {k: monitor[k] for k in _COMPACT_MONITOR_FIELDS if k in monitor}
 
 
 def _convert_monitor_return(monitor) -> None:
@@ -623,22 +652,15 @@ class UptimeKumaApi(object):
             sio_kwargs["logger"] = logger
         self.sio = socketio.Client(**sio_kwargs)
 
-        self._event_data: dict = {
-            Event.MONITOR_LIST: None,
-            Event.NOTIFICATION_LIST: None,
-            Event.PROXY_LIST: None,
-            Event.STATUS_PAGE_LIST: None,
-            Event.HEARTBEAT_LIST: None,
-            Event.IMPORTANT_HEARTBEAT_LIST: None,
-            Event.AVG_PING: None,
-            Event.UPTIME: None,
-            Event.INFO: None,
-            Event.CERT_INFO: None,
-            Event.DOCKER_HOST_LIST: None,
-            Event.AUTO_LOGIN: None,
-            Event.MAINTENANCE_LIST: None,
-            Event.API_KEY_LIST: None
-        }
+        # Separate from the engineio http_session above: Better Auth cookies must
+        # not leak into the socket.io transport's own requests.
+        self._auth_session = requests.Session()
+        self._auth_session.verify = self.ssl_verify
+        self._auth_session.headers.update(self.headers or {})
+        self._session_cookie = None
+
+        self._dashboard_rendered_sent = False
+        self._reset_event_cache()
 
         self.sio.on(Event.CONNECT, self._event_connect)
         self.sio.on(Event.DISCONNECT, self._event_disconnect)
@@ -650,16 +672,15 @@ class UptimeKumaApi(object):
         self.sio.on(Event.STATUS_PAGE_LIST, self._event_status_page_list)
         self.sio.on(Event.HEARTBEAT_LIST, self._event_heartbeat_list)
         self.sio.on(Event.IMPORTANT_HEARTBEAT_LIST, self._event_important_heartbeat_list)
-        self.sio.on(Event.AVG_PING, self._event_avg_ping)
-        self.sio.on(Event.UPTIME, self._event_uptime)
         self.sio.on(Event.HEARTBEAT, self._event_heartbeat)
         self.sio.on(Event.INFO, self._event_info)
         self.sio.on(Event.CERT_INFO, self._event_cert_info)
         self.sio.on(Event.DOCKER_HOST_LIST, self._event_docker_host_list)
-        self.sio.on(Event.AUTO_LOGIN, self._event_auto_login)
         self.sio.on(Event.INIT_SERVER_TIMEZONE, self._event_init_server_timezone)
         self.sio.on(Event.MAINTENANCE_LIST, self._event_maintenance_list)
-        self.sio.on(Event.API_KEY_LIST, self._event_api_key_list)
+        self.sio.on(Event.SESSION, self._event_session)
+        self.sio.on(Event.STATS, self._event_stats)
+        self.sio.on(Event.HEARTBEAT_LISTS, self._event_heartbeat_lists)
 
         self.connect()
 
@@ -694,8 +715,50 @@ class UptimeKumaApi(object):
                     raise Timeout(f"Timed out while waiting for event {event}")
                 time.sleep(0.01)
 
+    def _reset_event_cache(self) -> None:
+        """Clear every cached event and forget that dashboardRendered was sent."""
+        self._event_data = {
+            Event.MONITOR_LIST: None,
+            Event.NOTIFICATION_LIST: None,
+            Event.PROXY_LIST: None,
+            Event.STATUS_PAGE_LIST: None,
+            Event.HEARTBEAT_LIST: None,
+            Event.IMPORTANT_HEARTBEAT_LIST: None,
+            Event.INFO: None,
+            Event.CERT_INFO: None,
+            Event.DOCKER_HOST_LIST: None,
+            Event.MAINTENANCE_LIST: None,
+            Event.SESSION: None,
+            Event.STATS: None,
+        }
+        self._dashboard_rendered_sent = False
+        self._heartbeat_lists_received = False
+
+    def _ensure_heartbeat_history(self) -> None:
+        """
+        Ask the server for the deferred heartbeat snapshot, once per connection.
+
+        Uptime Kuma 3 sends ``heartbeatLists`` only after the client emits
+        ``dashboardRendered``. The monitor list arrives after login, so wait
+        for it first: an unpopulated cache (None) does not mean "no monitors".
+        The emit is fire and forget, because the server sends no ack.
+
+        :raises Timeout: If the monitor list does not arrive in time.
+        """
+        if self._dashboard_rendered_sent:
+            return
+        timestamp = time.time()
+        while self._event_data[Event.MONITOR_LIST] is None:
+            if time.time() - timestamp > self.timeout:
+                raise Timeout(f"Timed out while waiting for event {Event.MONITOR_LIST}")
+            time.sleep(0.01)
+        if self._event_data[Event.MONITOR_LIST] == {}:
+            return  # no monitors; nothing to request, nothing to wait for
+        self._dashboard_rendered_sent = True
+        self.sio.emit("dashboardRendered")
+
     def _get_event_data(self, event) -> Any:
-        monitor_events = [Event.AVG_PING, Event.UPTIME, Event.HEARTBEAT_LIST, Event.IMPORTANT_HEARTBEAT_LIST, Event.CERT_INFO, Event.HEARTBEAT]
+        monitor_events = [Event.STATS, Event.HEARTBEAT_LIST, Event.IMPORTANT_HEARTBEAT_LIST, Event.CERT_INFO, Event.HEARTBEAT]
         timestamp = time.time()
         while self._event_data[event] is None:
             if time.time() - timestamp > self.timeout:
@@ -801,22 +864,6 @@ class UptimeKumaApi(object):
         else:
             self._event_data[Event.IMPORTANT_HEARTBEAT_LIST][monitor_id].extend(data)
 
-    def _event_avg_ping(self, monitor_id, data) -> None:
-        monitor_id = int(monitor_id)
-
-        if self._event_data[Event.AVG_PING] is None:
-            self._event_data[Event.AVG_PING] = {}
-        self._event_data[Event.AVG_PING][monitor_id] = data
-
-    def _event_uptime(self, monitor_id, type_, data) -> None:
-        monitor_id = int(monitor_id)
-
-        if self._event_data[Event.UPTIME] is None:
-            self._event_data[Event.UPTIME] = {}
-        if monitor_id not in self._event_data[Event.UPTIME]:
-            self._event_data[Event.UPTIME][monitor_id] = {}
-        self._event_data[Event.UPTIME][monitor_id][type_] = data
-
     def _event_heartbeat(self, data) -> None:
         if self._event_data[Event.HEARTBEAT_LIST] is None:
             self._event_data[Event.HEARTBEAT_LIST] = {}
@@ -851,17 +898,36 @@ class UptimeKumaApi(object):
     def _event_docker_host_list(self, data) -> None:
         self._event_data[Event.DOCKER_HOST_LIST] = data
 
-    def _event_auto_login(self) -> None:
-        self._event_data[Event.AUTO_LOGIN] = True
+    def _event_session(self, *args) -> None:
+        # sent at connect time when the server runs with disableAuth
+        self._event_data[Event.SESSION] = True
+
+    def _event_stats(self, data) -> None:
+        # {monitorId: {avgPing, avgPing720, avgPing1y, uptime24, uptime720, uptime1y}};
+        # rebind rather than mutate: this runs on the socket.io read thread
+        stats = self._event_data[Event.STATS]
+        stats = {} if stats is None else dict(stats)
+        for monitor_id, values in data.items():
+            stats[int(monitor_id)] = values
+        self._event_data[Event.STATS] = stats
+
+    def _event_heartbeat_lists(self, data) -> None:
+        # {monitorId: [latest heartbeat]}; only fills ids not already cached so
+        # live heartbeat events are not overwritten
+        cache = self._event_data[Event.HEARTBEAT_LIST]
+        cache = {} if cache is None else dict(cache)
+        for monitor_id, rows in data.items():
+            monitor_id = int(monitor_id)
+            if monitor_id not in cache:
+                cache[monitor_id] = rows
+        self._event_data[Event.HEARTBEAT_LIST] = cache
+        self._heartbeat_lists_received = True
 
     def _event_init_server_timezone(self) -> None:
         pass
 
     def _event_maintenance_list(self, data) -> None:
         self._event_data[Event.MAINTENANCE_LIST] = data
-
-    def _event_api_key_list(self, data) -> None:
-        self._event_data[Event.API_KEY_LIST] = data
 
     # connection
 
@@ -889,6 +955,56 @@ class UptimeKumaApi(object):
                 "Install uptime-kuma-api2<3 for Uptime Kuma 1.x and 2.x."
             )
 
+    def _auth_request(self, method: str, path: str, json_body=None, *, use_session_cookie: bool = False) -> dict:
+        # One funnel for every Better Auth HTTP call. Messages never include the
+        # request body, cookies or raw response text.
+        if use_session_cookie and self._session_cookie is None:
+            raise UptimeKumaException("the session is not logged in")
+        try:
+            r = self._auth_session.request(
+                method,
+                f"{self.url}{path}",
+                json=json_body,
+                headers={"Origin": self.url},
+                timeout=self.timeout,
+            )
+        except requests.exceptions.Timeout as e:
+            raise Timeout(f"request to {path} timed out") from e
+        except requests.exceptions.RequestException as e:
+            raise UptimeKumaException(f"request to {path} failed ({type(e).__name__})") from None
+        if r.status_code == 429:
+            raise UptimeKumaException(
+                "rate limited by the server (Better Auth allows 10 requests per 60 seconds)"
+            )
+        try:
+            body = r.json() if r.content else {}
+        except ValueError:
+            raise UptimeKumaException(f"invalid response from {path}") from None
+        if not isinstance(body, dict):
+            body = {}
+        if not (200 <= r.status_code < 300):
+            message = body.get("message") or body.get("msg")
+            if not isinstance(message, str) or not message:
+                message = f"{path} failed with status {r.status_code}"
+            raise UptimeKumaException(message)
+        return body
+
+    def _reconnect_with_cookie(self, cookie_value: str) -> None:
+        # The server reads the session cookie once, at the socket handshake, so
+        # the socket is reopened with the cookie instead of authenticating live.
+        # sio.connect is called directly, not connect(): the pre-3.0 probe in
+        # connect() already ran when this instance was created, and this server
+        # has since answered Better Auth requests, so it is known to be 3.x.
+        self.sio.disconnect()
+        headers = dict(self.headers or {})
+        headers["Cookie"] = f"better-auth.session_token={cookie_value}"
+        self._reset_event_cache()
+        try:
+            self.sio.connect(f'{self.url}/socket.io/', wait_timeout=self.timeout, headers=headers)
+        except Exception:
+            raise UptimeKumaException("unable to connect") from None
+        with self.wait_for_event(Event.INFO):
+            pass
     def disconnect(self) -> None:
         """
         Disconnects from Uptime Kuma.
@@ -1654,7 +1770,6 @@ class UptimeKumaApi(object):
             published: bool = True,
             showTags: bool = False,
             domainNameList: list = None,
-            googleAnalyticsId: str = None,
             customCSS: str = "",
             footerText: str = None,
             showPoweredBy: bool = True,
@@ -1667,8 +1782,6 @@ class UptimeKumaApi(object):
             analyticsType: str = None,
             analyticsId: str = None,
             analyticsScriptUrl: str = None,
-            # accepted and ignored: the server no longer reads a status page password
-            password: str = None,
             showOnlyLastHeartbeat: bool = None,
             rssTitle: str = None,
     ) -> tuple[str, dict, str, list]:
@@ -1702,8 +1815,6 @@ class UptimeKumaApi(object):
         # server validates analyticsType and rejects the whole save with "Invalid
         # analytics type" if the key is absent; null, "google", "plausible" and
         # "umami" are accepted, while an absent key, "" and "none" are rejected.
-        # googleAnalyticsId and password are accepted by this method and ignored,
-        # so a caller that still passes them does not break.
         config["analyticsType"] = analyticsType
         config["analyticsId"] = analyticsId
         config["analyticsScriptUrl"] = analyticsScriptUrl
@@ -1718,95 +1829,42 @@ class UptimeKumaApi(object):
 
     def get_monitors(self) -> list[dict]:
         """
-        Get all monitors.
+        Get all monitors in compact form.
 
-        :return: A list of monitors.
+        Uptime Kuma 3.x sends only a compact record per monitor, so this method
+        returns the eleven compact fields and nothing else, without a
+        ``getMonitor`` request per monitor. A field the server did not send is
+        left out of the dict. To get full records, call :meth:`get_monitor` for
+        each id::
+
+            [api.get_monitor(m["id"]) for m in api.get_monitors()]
+
+        :return: A list of compact monitors.
         :rtype: list
+        :raises Timeout: If the monitor list does not arrive in time.
 
         Example::
 
             >>> api.get_monitors()
             [
                 {
-                    'accepted_statuscodes': ['200-299'],
                     'active': True,
-                    'authDomain': None,
-                    'authMethod': <AuthMethod.NONE: ''>,
-                    'authWorkstation': None,
-                    'basic_auth_pass': None,
-                    'basic_auth_user': None,
-                    'body': None,
                     'childrenIDs': [],
-                    'databaseConnectionString': None,
-                    'databaseQuery': None,
-                    'description': None,
-                    'dns_last_result': None,
-                    'dns_resolve_server': '1.1.1.1',
-                    'dns_resolve_type': 'A',
-                    'conditions': [],
-                    'docker_container': None,
-                    'docker_host': None,
-                    'expiryNotification': False,
-                    'forceInactive': False,
-                    'game': None,
-                    'grpcBody': None,
-                    'grpcEnableTls': False,
-                    'grpcMetadata': None,
-                    'grpcMethod': None,
-                    'grpcProtobuf': None,
-                    'grpcServiceName': None,
-                    'grpcUrl': None,
-                    'headers': None,
-                    'hostname': None,
-                    'httpBodyEncoding': 'json',
                     'id': 1,
-                    'ignoreTls': False,
-                    'includeSensitiveData': True,
                     'interval': 60,
-                    'keyword': None,
-                    'maintenance': False,
-                    'maxredirects': 10,
-                    'maxretries': 0,
-                    'method': 'GET',
-                    'mqttPassword': None,
-                    'mqttSuccessMessage': None,
-                    'mqttTopic': None,
-                    'mqttUsername': None,
                     'name': 'monitor 1',
-                    'notificationIDList': [1, 2],
-                    'packetSize': 56,
                     'parent': None,
+                    'path': ['monitor 1'],
                     'pathName': 'monitor 1',
-                    'port': None,
-                    'proxyId': None,
-                    'pushToken': None,
-                    'radiusCalledStationId': None,
-                    'radiusCallingStationId': None,
-                    'radiusPassword': None,
-                    'radiusSecret': None,
-                    'radiusUsername': None,
-                    'resendInterval': 0,
-                    'retryInterval': 60,
                     'tags': [],
-                    'tlsCa': None,
-                    'tlsCert': None,
-                    'tlsKey': None,
                     'type': <MonitorType.HTTP: 'http'>,
-                    'upsideDown': False,
-                    'url': 'http://127.0.0.1',
                     'weight': 2000
                 }
             ]
         """
-
-        # TODO: replace with getMonitorList?
-
-        r = list(self._get_event_data(Event.MONITOR_LIST).values())
-        for monitor in r:
-            _convert_monitor_return(monitor)
+        r = [_to_compact_monitor(m) for m in self._get_event_data(Event.MONITOR_LIST).values()]
         int_to_bool(r, ["active"])
         parse_monitor_type(r)
-        parse_auth_method(r)
         return r
 
     def get_monitor(self, id_: int) -> dict:
@@ -2608,18 +2666,21 @@ class UptimeKumaApi(object):
 
         :return: All status pages.
         :rtype: list
+        :raises Timeout: If the status page list does not arrive in time.
 
         Example::
 
             >>> api.get_status_pages()
             [
                 {
+                    'analyticsId': None,
+                    'analyticsScriptUrl': None,
+                    'analyticsType': None,
                     'customCSS': '',
                     'description': 'description 1',
                     'domainNameList': [],
                     'footerText': None,
                     'icon': '/icon.svg',
-                    'googleAnalyticsId': '',
                     'id': 1,
                     'published': True,
                     'showPoweredBy': False,
@@ -2645,16 +2706,19 @@ class UptimeKumaApi(object):
         :return: The status page.
         :rtype: dict
         :raises UptimeKumaException: If the server returns an error.
+        :raises Timeout: If the server does not answer.
 
         Example::
 
             >>> api.get_status_page("slug1")
             {
+                'analyticsId': None,
+                'analyticsScriptUrl': None,
+                'analyticsType': None,
                 'customCSS': '',
                 'description': 'description 1',
                 'domainNameList': [],
                 'footerText': None,
-                'googleAnalyticsId': '',
                 'icon': '/icon.svg',
                 'id': 1,
                 'incident': {
@@ -2818,7 +2882,6 @@ class UptimeKumaApi(object):
         :param bool, optional published: Published, defaults to True
         :param bool, optional showTags: Show Tags, defaults to False
         :param list, optional domainNameList: Domain Names, defaults to None
-        :param str, optional googleAnalyticsId: Accepted and ignored. Uptime Kuma 2.1 and later replaced it with `analyticsType` and `analyticsId`. Defaults to None
         :param str, optional customCSS: Custom CSS, defaults to ""
         :param str, optional footerText: Custom Footer, defaults to None
         :param bool, optional showPoweredBy: Show Powered By, defaults to True
@@ -2828,6 +2891,7 @@ class UptimeKumaApi(object):
         :return: The server response.
         :rtype: dict
         :raises UptimeKumaException: If the server returns an error.
+        :raises Timeout: If the server does not answer.
 
         Example::
 
@@ -2881,7 +2945,6 @@ class UptimeKumaApi(object):
         status_page.pop("incidents", None)  # returned alongside "incident"
         status_page.pop("maintenanceList")
         status_page.pop("autoRefreshInterval", None)
-        status_page.pop("googleAnalyticsId", None)  # legacy field the server may still return
         status_page.update(
             {k: v for k, v in kwargs.items() if k not in withheld}
         )
@@ -2966,8 +3029,14 @@ class UptimeKumaApi(object):
         """
         Get heartbeats.
 
+        Uptime Kuma 3 sends the heartbeat history only on request. The first
+        call on a connection emits ``dashboardRendered`` and waits for the
+        ``heartbeatLists`` reply. A server with no monitors returns an empty
+        result at once.
+
         :return: The heartbeats for each monitor id.
         :rtype: dict
+        :raises Timeout: If the monitor list or the heartbeat history does not arrive in time.
 
         Example::
 
@@ -2999,6 +3068,14 @@ class UptimeKumaApi(object):
                 ]
             }
         """
+        self._ensure_heartbeat_history()
+        # a live heartbeat event can fill the cache before heartbeatLists
+        # arrives, so wait for the snapshot itself while monitors exist
+        timestamp = time.time()
+        while self._event_data[Event.MONITOR_LIST] and not self._heartbeat_lists_received:
+            if time.time() - timestamp > self.timeout:
+                raise Timeout(f"Timed out while waiting for event {Event.HEARTBEAT_LISTS}")
+            time.sleep(0.01)
         r = self._get_event_data(Event.HEARTBEAT_LIST)
         for i in r:
             int_to_bool(r[i], ["important"])
@@ -3054,17 +3131,36 @@ class UptimeKumaApi(object):
         """
         Get average ping.
 
-        :return: The average ping for each monitor id.
+        Each monitor id maps to the average ping in milliseconds over the last
+        24 hours (``24``), 30 days (``720``) and one year (``"1y"``). A value is
+        ``None`` when the monitor has no completed check in that window.
+
+        The server sends these stats after login, so the stats of a monitor
+        created after login arrive after the next login or the server's
+        periodic refresh.
+
+        :return: ``{monitor id: {24: <ms>, 720: <ms>, "1y": <ms>}}``
         :rtype: dict
+        :raises Timeout: If the monitor list or the stats do not arrive in time.
 
         Example::
 
             >>> api.avg_ping()
             {
-                1: 10
+                1: {
+                    24: 10.5,
+                    720: 11.2,
+                    '1y': 12.0
+                }
             }
         """
-        return self._get_event_data(Event.AVG_PING)
+        # the server sends stats with the deferred lists, after dashboardRendered
+        self._ensure_heartbeat_history()
+        stats = self._get_event_data(Event.STATS) or {}
+        return {
+            monitor_id: {24: s["avgPing"], 720: s["avgPing720"], "1y": s["avgPing1y"]}
+            for monitor_id, s in stats.items()
+        }
 
     # cert info
 
@@ -3234,8 +3330,16 @@ class UptimeKumaApi(object):
         """
         Get monitor uptime.
 
-        :return: Monitor uptime.
+        Each monitor id maps to the uptime ratio (0 to 1, as the server sends it)
+        over the last 24 hours (``24``), 30 days (``720``) and one year (``"1y"``).
+
+        The server sends these stats after login, so the stats of a monitor
+        created after login arrive after the next login or the server's
+        periodic refresh.
+
+        :return: ``{monitor id: {24: <ratio>, 720: <ratio>, "1y": <ratio>}}``
         :rtype: dict
+        :raises Timeout: If the monitor list or the stats do not arrive in time.
 
         Example::
 
@@ -3243,11 +3347,18 @@ class UptimeKumaApi(object):
             {
                 1: {
                     24: 1,
-                    720: 1
+                    720: 1,
+                    '1y': 1
                 }
             }
         """
-        return self._get_event_data(Event.UPTIME)
+        # the server sends stats with the deferred lists, after dashboardRendered
+        self._ensure_heartbeat_history()
+        stats = self._get_event_data(Event.STATS) or {}
+        return {
+            monitor_id: {24: s["uptime24"], 720: s["uptime720"], "1y": s["uptime1y"]}
+            for monitor_id, s in stats.items()
+        }
 
     # info
 
@@ -3595,9 +3706,11 @@ class UptimeKumaApi(object):
 
         :param str old_password: Old password
         :param str new_password: New password
-        :return: The server response.
+        :return: ``{"msg": "Password has been updated successfully."}``
         :rtype: dict
-        :raises UptimeKumaException: If the server returns an error.
+        :raises UptimeKumaException: If the session is not logged in ("the session is not logged in"), the server rate limits the request (HTTP 429), or the server returns an error (for example a wrong current password).
+
+        Other sessions of the user stay signed in.
 
         Example::
 
@@ -3609,10 +3722,12 @@ class UptimeKumaApi(object):
                 'msg': 'Password has been updated successfully.'
             }
         """
-        return self._call('changePassword', {
+        self._auth_request("POST", "/api/auth/change-password", {
             "currentPassword": old_password,
             "newPassword": new_password,
-        })
+            "revokeOtherSessions": False,
+        }, use_session_cookie=True)
+        return {"msg": "Password has been updated successfully."}
 
     def upload_backup(self, json_data: str, import_handle: str = "skip") -> dict:
         """
@@ -3646,13 +3761,18 @@ class UptimeKumaApi(object):
 
     # 2FA
 
+    def _twofa_request(self, path: str, json_body=None) -> dict:
+        # Two-factor calls need the logged-in session cookie. A GET carries no body.
+        method = "GET" if json_body is None else "POST"
+        return self._auth_request(method, path, json_body, use_session_cookie=True)
+
     def twofa_status(self) -> dict:
         """
         Get current 2FA status.
 
-        :return: The server response.
+        :return: ``{"status": <bool>}``, read from the current Better Auth session.
         :rtype: dict
-        :raises UptimeKumaException: If the server returns an error.
+        :raises UptimeKumaException: If the session is not logged in ("the session is not logged in"), the server rate limits the request (HTTP 429), or the server returns an error.
 
         Example::
 
@@ -3661,16 +3781,19 @@ class UptimeKumaApi(object):
                 'status': False
             }
         """
-        return self._call('twoFAStatus')
+        resp = self._twofa_request("/api/auth/get-session")
+        user = resp.get("user")
+        return {"status": bool(isinstance(user, dict) and user.get("twoFactorEnabled"))}
 
     def prepare_2fa(self, password: str) -> dict:
         """
-        Prepare 2FA configuration.
+        Prepare 2FA configuration. The server creates the secret and stores it
+        as unverified. Call :meth:`verify_token` with a code from it to turn 2FA on.
 
         :param str password: Current password.
-        :return: The server response.
+        :return: ``{"uri": <otpauth URI>}``. Backup codes returned by the server are not included.
         :rtype: dict
-        :raises UptimeKumaException: If the server returns an error.
+        :raises UptimeKumaException: If the session is not logged in ("the session is not logged in"), the password is wrong, the server did not return a 2FA URI, the server rate limits the request (HTTP 429), or the server returns an error.
 
         Example::
 
@@ -3691,17 +3814,22 @@ class UptimeKumaApi(object):
             >>> secret
             NBGVQNSNNRXWQ3LJJN4DIWSWIIYW45CZJRXXORSNOY3USSKXO5RG4MDPI5ZUK5CWJFIFOVCBGZVG24TSJ5LDE2BTMRLXOZBSJF3TISA
         """
-        return self._call('prepare2FA', password)
+        resp = self._twofa_request("/api/auth/two-factor/enable", {"password": password})
+        uri = resp.get("totpURI")
+        if not uri:
+            raise UptimeKumaException("the server did not return a 2FA URI")
+        return {"uri": uri}
 
     def verify_token(self, token: str, password: str) -> dict:
         """
-        Verify the provided 2FA token.
+        Verify the provided 2FA token. On Uptime Kuma 3.x this step also turns
+        2FA on for the account.
 
         :param str token: 2FA token.
-        :param str password: Current password.
-        :return: The server response.
+        :param str password: Not sent. Kept for compatibility with earlier versions.
+        :return: ``{"valid": True}``.
         :rtype: dict
-        :raises UptimeKumaException: If the server returns an error.
+        :raises UptimeKumaException: If the session is not logged in ("the session is not logged in"), the server rejects the token, or the server rate limits the request (HTTP 429).
 
         Example::
 
@@ -3717,16 +3845,18 @@ class UptimeKumaApi(object):
                 'valid': True
             }
         """
-        return self._call('verifyToken', (token, password))
+        self._twofa_request("/api/auth/two-factor/verify-totp", {"code": token})
+        return {"valid": True}
 
     def save_2fa(self, password: str) -> dict:
         """
-        Save the current 2FA configuration.
+        Confirm that 2FA is enabled. On Uptime Kuma 3.x :meth:`verify_token`
+        already enables it, so this only checks the current session.
 
-        :param str password: Current password.
-        :return: The server response.
+        :param str password: Not sent. Kept for compatibility with earlier versions.
+        :return: ``{"msg": "2FA Enabled."}``.
         :rtype: dict
-        :raises UptimeKumaException: If the server returns an error.
+        :raises UptimeKumaException: If 2FA is not enabled yet (call :meth:`verify_token` first), the session is not logged in ("the session is not logged in"), the server rate limits the request (HTTP 429), or the server returns an error.
 
         Example::
 
@@ -3735,16 +3865,18 @@ class UptimeKumaApi(object):
                 'msg': '2FA Enabled.'
             }
         """
-        return self._call('save2FA', password)
+        if not self.twofa_status()["status"]:
+            raise UptimeKumaException("2FA was not verified; call verify_token first")
+        return {"msg": "2FA Enabled."}
 
     def disable_2fa(self, password: str) -> dict:
         """
         Disable 2FA for this user.
 
         :param str password: Current password.
-        :return: The server response.
+        :return: ``{"msg": "2FA Disabled."}``.
         :rtype: dict
-        :raises UptimeKumaException: If the server returns an error.
+        :raises UptimeKumaException: If the session is not logged in ("the session is not logged in"), the password is wrong, the server rate limits the request (HTTP 429), or the server returns an error.
 
         Example::
 
@@ -3753,30 +3885,40 @@ class UptimeKumaApi(object):
                 'msg': '2FA Disabled.'
             }
         """
-        return self._call('disable2FA', password)
+        self._twofa_request("/api/auth/two-factor/disable", {"password": password})
+        return {"msg": "2FA Disabled."}
 
     # login
 
-    def login(self, username: str = None, password: str = None, token: str = "") -> dict:
+    def login(self, username: str = None, password: str = None, token: str = None) -> dict:
         """
         Login.
 
-        If username and password is not provided, auto login is performed if disableAuth is enabled.
+        With a username and password, signs in through Uptime Kuma's Better Auth
+        HTTP endpoint, then reopens the socket with the resulting session cookie.
+        If username and password are not provided, the login is a no-op that waits
+        for the server's ``session`` event, which it sends when disableAuth is enabled.
 
         :param str, optional username: Username. Must be None if disableAuth is enabled., defaults to None
         :param str, optional password: Password. Must be None if disableAuth is enabled., defaults to None
-        :param str, optional token: 2FA Token. Required if 2FA is enabled., defaults to ""
-        :return: The server response.
+        :param str, optional token: 2FA Token. Required if 2FA is enabled., defaults to None
+        :return: ``{"token": <session cookie value>}``. The value can be passed to :meth:`~login_by_token`. An empty dict if disableAuth is enabled.
         :rtype: dict
-        :raises UptimeKumaException: If the server returns an error.
+        :raises UptimeKumaException: If the server returns an error (for example wrong credentials), a 2FA token is required and none was given, the server did not return a session cookie, or the server rate limits the request (HTTP 429, Better Auth allows 10 requests per 60 seconds).
+        :raises Timeout: If the server does not answer, or does not send ``session`` when logging in without credentials.
 
         .. note::
+            Better Auth allows 10 requests per 60 seconds, so repeated logins can be rate limited.
 
-            An "API key" created in the Uptime Kuma web UI is not a credential for
-            this library. The UI "API key" cannot authenticate this socket.io API:
-            it only grants access to Uptime Kuma's Prometheus ``/metrics``
-            endpoint. Authenticate with a username and password, or with a login
-            token via :meth:`~login_by_token`.
+        .. note::
+            An API key created on Uptime Kuma 3.x can authenticate the socket
+            through an ``Authorization: Bearer <key>`` header, passed when the
+            connection is created, as
+            ``UptimeKumaApi(url, headers={"Authorization": "Bearer <key>"})``.
+            This works when the server's "API and MCP" setting (``apiEnabled``)
+            is on, and no :meth:`login` call is needed. Create a key with
+            :meth:`~add_api_key`. Keys carried over from Uptime Kuma 2.x work
+            only on the ``/metrics`` endpoint.
 
         Example::
 
@@ -3784,61 +3926,114 @@ class UptimeKumaApi(object):
             >>> password = "secret123"
             >>> api.login(username, password)
             {
-                'token': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VybmFtZSI6ImFkbWluIiwiaWF0IjoxNjcxMTk3MjkzfQ.lpho_LuKMnoltXOdA7-jZ98gXOU-UbEIuxMwMRm4Nz0'
+                'token': 'bYq6P1h6e0Lw1l3o8x3V9dWc0n2JtTqk.2f9Q...'
             }
+
+            >>> # with an API key instead of a login
+            >>> api = UptimeKumaApi(url, headers={"Authorization": "Bearer uk_9XPRjV7ilGj9CvWRKYiBPq9GLtQs74UzTxKfCxWY"})
         """
-
-        # autologin
+        # no credentials: disableAuth makes the server send "session" at connect
         if username is None and password is None:
-            with self.wait_for_event(Event.AUTO_LOGIN):
+            with self.wait_for_event(Event.SESSION):
                 return {}
-
-        return self._call('login', {
+        # drop cookies left by an earlier login or a half-finished 2FA attempt
+        self._auth_session.cookies.clear()
+        self._session_cookie = None
+        resp = self._auth_request("POST", "/api/auth/sign-in/username", {
             "username": username,
             "password": password,
-            "token": token
+            "rememberMe": True
         })
+        if resp.get("twoFactorRedirect"):
+            if not token:
+                raise UptimeKumaException("a 2FA token is required for this account")
+            # the better-auth.two_factor cookie from sign-in is in the cookie jar
+            self._auth_request("POST", "/api/auth/two-factor/verify-totp", {"code": token})
+        cookie_value = self._auth_session.cookies.get("better-auth.session_token")
+        if not cookie_value:
+            raise UptimeKumaException("the server did not return a session cookie")
+        self._session_cookie = cookie_value
+        self._reconnect_with_cookie(cookie_value)
+        return {"token": cookie_value}
 
     def login_by_token(self, token: str) -> dict:
         """
         Login by token.
 
+        Reopens the socket with the session cookie and checks that the server
+        authenticated it. The token is the value :meth:`~login` returned, and
+        is also what :meth:`~logout` signs out.
+
         :param str token: Login token generated by :meth:`~login`
-        :return: The server response.
+        :return: ``{"token": <token>}``, the token that was passed in.
         :rtype: dict
-        :raises UptimeKumaException: If the server returns an error.
+        :raises UptimeKumaException: If no token is given, or the server does not authenticate the socket with this token.
+        :raises Timeout: If the server does not answer.
 
         Example::
 
-            >>> api.login_by_token(token)
-            {}
+            >>> token = api.login("admin", "secret123")["token"]
+            >>> api2 = UptimeKumaApi("http://127.0.0.1:3001")
+            >>> api2.login_by_token(token)
+            {
+                'token': 'bYq6P1h6e0Lw1l3o8x3V9dWc0n2JtTqk.2f9Q...'
+            }
         """
-        return self._call('loginByToken', token)
+        if not token or not isinstance(token, str):
+            raise UptimeKumaException("a session token is required")
+        # put the cookie in the jar so logout() can send it, as after login()
+        self._auth_session.cookies.clear()
+        # domain as the jar derives it for a Set-Cookie without Domain, so a rotated
+        # cookie from the server replaces this one instead of sitting beside it
+        domain = eff_request_host(urllib.request.Request(self.url))[1]
+        self._auth_session.cookies.set("better-auth.session_token", token, domain=domain, path="/")
+        self._session_cookie = token
+        try:
+            self._reconnect_with_cookie(token)
+        except Timeout:
+            # The server sends "session" on an authenticated socket, before the
+            # post-login info. An unauthenticated socket gets only the
+            # pre-login info and loginRequired, so info never arrives.
+            if self._event_data[Event.SESSION] is None:
+                self._auth_session.cookies.clear()
+                self._session_cookie = None
+                raise UptimeKumaException("the server did not authenticate the session token") from None
+            raise
+        except UptimeKumaException:
+            self._auth_session.cookies.clear()
+            self._session_cookie = None
+            raise
+        return {"token": token}
 
     def logout(self) -> None:
         """
         Logout.
 
-        :return: The server response.
+        Signs the session out over HTTP and forgets the stored token. The socket
+        stays connected.
+
+        :return: None
         :rtype: None
-        :raises UptimeKumaException: If the server returns an error.
+        :raises UptimeKumaException: If the session is not logged in ("the session is not logged in"), the server rate limits the request (HTTP 429), or the server returns an error.
 
         Example::
 
             >>> api.logout()
-            None
         """
-        return self._call('logout')
+        self._auth_request("POST", "/api/auth/sign-out", use_session_cookie=True)
+        self._session_cookie = None
+        self._auth_session.cookies.clear()
 
     # setup
 
     def need_setup(self) -> bool:
         """
-        Check if the server has already been set up.
+        Check if the server still needs to be set up.
 
-        :return: The server response.
+        :return: ``True`` if no user exists yet, ``False`` if the server is already set up.
         :rtype: bool
         :raises UptimeKumaException: If the server returns an error.
+        :raises Timeout: If the server does not answer.
 
         Example::
 
@@ -3853,18 +4048,22 @@ class UptimeKumaApi(object):
 
         :param str username: Username
         :param str password: Password
-        :return: The server response.
+        :return: ``{"msg": "Added Successfully."}``
         :rtype: dict
-        :raises UptimeKumaException: If the server returns an error.
+        :raises UptimeKumaException: If the server is already set up, the server rate limits the request (HTTP 429), or the server returns an error.
 
         Example::
 
-            >>> api.setup(username, password)
+            >>> api.setup("admin", "secret123")
             {
                 'msg': 'Added Successfully.'
             }
         """
-        return self._call("setup", (username, password))
+        self._auth_request("POST", "/api/setup", {
+            "username": username,
+            "password": password,
+        })
+        return {"msg": "Added Successfully."}
 
     # database
 
@@ -4570,175 +4769,137 @@ class UptimeKumaApi(object):
         """
         Get all api keys.
 
+        Native keys have an opaque string id. Keys carried over from Uptime
+        Kuma 2.x have an id of the form ``legacy-<n>`` and work only on the
+        Prometheus ``/metrics`` endpoint.
+
         :return: All api keys.
         :rtype: list
         :raises UptimeKumaException: If the server returns an error.
+        :raises Timeout: If the server does not answer.
 
         Example::
 
-            >>> api.get_api_key_list()
+            >>> api.get_api_keys()
             [
                 {
-                    "id": 1,
+                    "id": "kV3p0xYt9QmZ",
                     "name": "test",
-                    "userID": 1,
-                    "createdDate": "2023-03-20 11:15:05",
-                    "active": False,
-                    "expires": null,
-                    "status": "inactive"
+                    "start": "uk_9X",
+                    "createdDate": "2026-03-20T11:15:05.000Z",
+                    "active": True,
+                    "expires": None,
+                    "status": "active"
                 },
                 {
-                    "id": 2,
+                    "id": "legacy-2",
                     "name": "test2",
-                    "userID": 1,
                     "createdDate": "2023-03-20 11:20:29",
-                    "active": True,
+                    "active": False,
                     "expires": "2023-03-30 12:20:00",
-                    "status": "active"
+                    "status": "expired"
                 }
             ]
         """
+        r = self._call('getAPIKeyList')
+        api_keys = r["apiKeyList"]
+        for api_key in api_keys:
+            api_key["active"] = bool(api_key.pop("enabled", False))
+            api_key["createdDate"] = api_key.pop("createdAt", None)
+            api_key["expires"] = api_key.pop("expiresAt", None)
+            api_key["status"] = _api_key_status(api_key["active"], api_key["expires"])
+        return api_keys
 
-        # TODO: replace with getAPIKeyList?
-
-        r = self._get_event_data(Event.API_KEY_LIST)
-        int_to_bool(r, ["active"])
-        return r
-
-    def get_api_key(self, id_: int) -> dict:
+    def get_api_key(self, id_: Union[int, str]) -> dict:
         """
         Get an api key.
 
-        :param int id_: Id of the api key to get.
+        :param id_: Id of the api key to get. An int is converted to a string before it is compared.
+        :type id_: int or str
         :return: The api key.
         :rtype: dict
-        :raises UptimeKumaException: If the api key does not exist.
+        :raises UptimeKumaException: If the api key does not exist or the server returns an error.
+        :raises Timeout: If the server does not answer.
 
         Example::
 
-            >>> api.get_api_key(1)
+            >>> api.get_api_key("kV3p0xYt9QmZ")
             {
-                "id": 1,
+                "id": "kV3p0xYt9QmZ",
                 "name": "test",
-                "userID": 1,
-                "createdDate": "2023-03-20 11:15:05",
-                "active": False,
-                "expires": null,
-                "status": "inactive"
+                "start": "uk_9X",
+                "createdDate": "2026-03-20T11:15:05.000Z",
+                "active": True,
+                "expires": None,
+                "status": "active"
             }
         """
-        api_keys = self.get_api_keys()
-        for api_key in api_keys:
-            if api_key["id"] == id_:
+        for api_key in self.get_api_keys():
+            if str(api_key["id"]) == str(id_):
                 return api_key
-        raise UptimeKumaException("notification does not exist")
+        raise UptimeKumaException("api key does not exist")
 
-    def add_api_key(self, name: str, expires: str, active: bool) -> dict:
+    def add_api_key(self, name: str, expires: str = None) -> dict:
         """
         Adds a new api key.
 
+        A key created on Uptime Kuma 3.x can authenticate the socket through
+        ``UptimeKumaApi(url, headers={"Authorization": "Bearer <key>"})`` when
+        the server's "API and MCP" (``apiEnabled``) setting is on.
+
         :param str name: Name of the api key.
-        :param str expires: Expiration date of the api key. Set to ``None`` to disable expiration.
-        :param bool active: True to activate api key.
-        :return: The server response.
+        :param str, optional expires: Expiration date of the api key. Set to ``None`` to disable expiration., defaults to None
+        :return: The server response. ``key`` is the secret and is shown only once, ``keyID`` is the id of the new key.
         :rtype: dict
         :raises UptimeKumaException: If the server returns an error.
+        :raises Timeout: If the server does not answer.
 
         Example::
 
             >>> api.add_api_key(
             ...     name="test",
-            ...     expires="2023-03-30 12:20:00",
-            ...     active=True
+            ...     expires="2026-03-30 12:20:00"
             ... )
             {
-              "msg": "Added Successfully.",
-              "key": "uk1_9XPRjV7ilGj9CvWRKYiBPq9GLtQs74UzTxKfCxWY",
-              "keyID": 1
+              "msg": "successAdded",
+              "msgi18n": True,
+              "key": "uk_9XPRjV7ilGj9CvWRKYiBPq9GLtQs74UzTxKfCxWY",
+              "keyID": "kV3p0xYt9QmZ"
             }
 
-            >>> api.add_api_key(
-            ...     name="test2",
-            ...     expires=None,
-            ...     active=True
-            ... )
+            >>> api.add_api_key(name="test2")
             {
-              "msg": "Added Successfully.",
-              "key": "uk2_jsB9H1Zmt9eEjycNFMTKgse1B0Vfvb944H4_aRqW",
-              "keyID": 2
+              "msg": "successAdded",
+              "msgi18n": True,
+              "key": "uk_jsB9H1Zmt9eEjycNFMTKgse1B0Vfvb944H4_aRqW",
+              "keyID": "Zq8e1LmN4rTa"
             }
         """
-        data = {
-            "name": name,
-            "expires": expires,
-            "active": 1 if active else 0
-        }
-        with self.wait_for_event(Event.API_KEY_LIST):
-            return self._call('addAPIKey', data)
+        return self._call('addAPIKey', {"name": name, "expires": expires})
 
-    def enable_api_key(self, id_: int) -> dict:
+    def delete_api_key(self, id_: Union[int, str]) -> dict:
         """
-        Enable an api key.
+        Delete an api key.
 
-        :param int id_: Id of the api key to enable.
+        :param id_: Id of the api key to delete. An int is converted to a string before it is compared and sent.
+        :type id_: int or str
         :return: The server response.
         :rtype: dict
-        :raises UptimeKumaException: If the server returns an error.
+        :raises UptimeKumaException: If the api key does not exist or the server returns an error.
+        :raises Timeout: If the server does not answer.
 
         Example::
 
-            >>> api.enable_api_key(1)
+            >>> api.delete_api_key("kV3p0xYt9QmZ")
             {
-              "msg": "Enabled Successfully"
+              "msg": "successDeleted",
+              "msgi18n": True
             }
         """
-        with self.wait_for_event(Event.API_KEY_LIST):
-            return self._call('enableAPIKey', id_)
-
-    def disable_api_key(self, id_: int) -> dict:
-        """
-        Disable an api key.
-
-        :param int id_: Id of the api key to disable.
-        :return: The server response.
-        :rtype: dict
-        :raises UptimeKumaException: If the server returns an error.
-
-        Example::
-
-            >>> api.disable_api_key(1)
-            {
-              "msg": "Disabled Successfully."
-            }
-        """
-        with self.wait_for_event(Event.API_KEY_LIST):
-            return self._call('disableAPIKey', id_)
-
-    def delete_api_key(self, id_: int) -> dict:
-        """
-        Enable an api key.
-
-        :param int id_: Id of the api key to delete.
-        :return: The server response.
-        :rtype: dict
-        :raises UptimeKumaException: If the server returns an error.
-
-        Example::
-
-            >>> api.delete_api_key(1)
-            {
-              "msg": "Deleted Successfully."
-            }
-        """
-        with self.wait_for_event(Event.API_KEY_LIST):
-            ids = [i["id"] for i in self.get_api_keys()]
-            try:
-                id_ = int(id_)
-            except (TypeError, ValueError):
-                pass
-            if id_ not in ids:
-                raise UptimeKumaException("api key does not exist")
-            return self._call('deleteAPIKey', id_)
+        id_ = str(id_)
+        if id_ not in [str(i["id"]) for i in self.get_api_keys()]:
+            raise UptimeKumaException("api key does not exist")
+        return self._call('deleteAPIKey', id_)
 
     # helper methods
 

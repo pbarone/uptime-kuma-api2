@@ -34,24 +34,6 @@ class TestStatusPageV2(unittest.TestCase):
         self.assertEqual(config["analyticsId"], "my-domain.com")
         self.assertEqual(config["analyticsScriptUrl"], "https://plausible.io/js/script.js")
 
-    # --- Test 2: v2 googleAnalyticsId omitted from config ---
-    def test_v2_google_analytics_id_omitted(self):
-        _, config, _, _ = self.build_v2(
-            slug="test", id=1, title="Test Page",
-            googleAnalyticsId="UA-12345",
-        )
-        self.assertNotIn("googleAnalyticsId", config)
-
-
-    # --- Test 5: v2 password omitted even when provided ---
-    def test_v2_password_omitted(self):
-        _, config, _, _ = self.build_v2(
-            slug="test", id=1, title="Test Page",
-            password="secret123",
-        )
-        self.assertNotIn("password", config)
-
-
     # --- Test 8: v2 showOnlyLastHeartbeat and rssTitle included when provided ---
     def test_v2_new_fields_included(self):
         _, config, _, _ = self.build_v2(
@@ -513,8 +495,7 @@ class TestStatusPageFieldsAreUngated(unittest.TestCase):
 
     The analytics trio, ``showOnlyLastHeartbeat`` and ``rssTitle`` used to need
     an older server. Every supported server accepts them, so they are sent
-    whatever version the stub reports, and ``googleAnalyticsId`` (never read by
-    the server any more) is never sent.
+    whatever version the stub reports.
     """
 
     def test_floor_table_is_empty(self):
@@ -532,7 +513,6 @@ class TestStatusPageFieldsAreUngated(unittest.TestCase):
                 _, config, _, _ = build(
                     slug="t", id=1, title="T",
                     showOnlyLastHeartbeat=True, rssTitle="Feed",
-                    googleAnalyticsId="UA-1", password="pw",
                 )
                 self.assertEqual(config["showOnlyLastHeartbeat"], True)
                 self.assertEqual(config["rssTitle"], "Feed")
@@ -541,9 +521,120 @@ class TestStatusPageFieldsAreUngated(unittest.TestCase):
                 self.assertIn("analyticsScriptUrl", config)
                 self.assertIn("showCertificateExpiry", config)
                 self.assertEqual(config["theme"], "auto")
-                self.assertNotIn("googleAnalyticsId", config)
-                self.assertNotIn("password", config)
 
+
+class TestSaveStatusPageSignature(unittest.TestCase):
+    """save_status_page no longer takes ``password`` or ``googleAnalyticsId``.
+
+    Uptime Kuma 3.x neither reads nor returns either key (its status page
+    toJSON/toPublicJSON carry analyticsId, analyticsScriptUrl and
+    analyticsType), so a caller passing one gets a TypeError instead of a
+    silently ignored argument.
+    """
+
+    # What the 3.0.0-beta.2 server returns for a status page (toJSON keys),
+    # after get_status_page has added its own incident keys.
+    SERVER_SP = {
+        "id": 1,
+        "slug": "test-sp",
+        "title": "Test",
+        "description": "",
+        "icon": "/icon.svg",
+        "theme": "auto",
+        "published": True,
+        "showTags": False,
+        "domainNameList": [],
+        "customCSS": "",
+        "footerText": None,
+        "showPoweredBy": True,
+        "showCertificateExpiry": False,
+        "analyticsId": "site-1",
+        "analyticsScriptUrl": None,
+        "analyticsType": "plausible",
+        "showOnlyLastHeartbeat": False,
+        "rssTitle": None,
+        "incident": None,
+        "incidents": [],
+        "maintenanceList": [],
+        "autoRefreshInterval": 300,
+    }
+
+    def _make_api(self):
+        api = MagicMock(spec=UptimeKumaApi)
+        api.version = "3.0.0"
+        api._parsed_version = UptimeKumaApi._parsed_version.__get__(api)
+        api._build_status_page_data = UptimeKumaApi._build_status_page_data.__get__(api)
+        api._withheld_status_page_fields = UptimeKumaApi._withheld_status_page_fields.__get__(api)
+        api._warn_withheld_status_page_fields = UptimeKumaApi._warn_withheld_status_page_fields.__get__(api)
+        self._save = UptimeKumaApi.save_status_page.__get__(api)
+        api.get_status_page = MagicMock(return_value=dict(self.SERVER_SP))
+        api._call = MagicMock(side_effect=[
+            {"publicGroupList": []},
+            {"config": dict(self.SERVER_SP)},
+        ])
+        api._event_data = {Event.STATUS_PAGE_LIST: {}}
+        return api
+
+    def test_removed_keywords_raise_type_error_without_saving(self):
+        for key, value in (("password", "secret"), ("googleAnalyticsId", "G-1")):
+            with self.subTest(key=key):
+                api = self._make_api()
+                with self.assertRaises(TypeError):
+                    self._save("test-sp", **{key: value})
+                sent = [c.args[0] for c in api._call.call_args_list]
+                self.assertNotIn("saveStatusPage", sent)
+
+    def test_builder_rejects_removed_keywords(self):
+        build = UptimeKumaApi._build_status_page_data.__get__(self._make_api())
+        for key in ("password", "googleAnalyticsId"):
+            with self.subTest(key=key):
+                with self.assertRaises(TypeError):
+                    build(slug="t", id=1, title="T", **{key: "x"})
+
+    def test_remaining_parameters_reach_payload(self):
+        api = self._make_api()
+        groups = [{"name": "Services", "weight": 1, "monitorList": [{"id": 1}]}]
+        self._save(
+            "test-sp",
+            title="New Title", description="desc", theme="dark",
+            published=False, showTags=True, domainNameList=["a.example"],
+            customCSS="body{}", footerText="foot", showPoweredBy=False,
+            showCertificateExpiry=True, icon="/x.svg",
+            publicGroupList=groups,
+            analyticsType="umami", analyticsId="u-1",
+            analyticsScriptUrl="https://u.example/s.js",
+            showOnlyLastHeartbeat=True, rssTitle="Feed",
+        )
+        name, (slug, config, icon, public_groups) = api._call.call_args_list[0][0]
+        self.assertEqual(name, "saveStatusPage")
+        self.assertEqual(slug, "test-sp")
+        self.assertEqual(icon, "/x.svg")
+        self.assertEqual(public_groups, groups)
+        self.assertEqual(config["title"], "New Title")
+        self.assertEqual(config["description"], "desc")
+        self.assertEqual(config["theme"], "dark")
+        self.assertIs(config["published"], False)
+        self.assertIs(config["showTags"], True)
+        self.assertEqual(config["domainNameList"], ["a.example"])
+        self.assertEqual(config["customCSS"], "body{}")
+        self.assertEqual(config["footerText"], "foot")
+        self.assertIs(config["showPoweredBy"], False)
+        self.assertIs(config["showCertificateExpiry"], True)
+        self.assertEqual(config["analyticsType"], "umami")
+        self.assertEqual(config["analyticsId"], "u-1")
+        self.assertEqual(config["analyticsScriptUrl"], "https://u.example/s.js")
+        self.assertIs(config["showOnlyLastHeartbeat"], True)
+        self.assertEqual(config["rssTitle"], "Feed")
+        self.assertNotIn("password", config)
+        self.assertNotIn("googleAnalyticsId", config)
+
+    def test_server_config_as_returned_by_3x_still_saves(self):
+        """No kwargs: the merged server config (all toJSON keys) is accepted."""
+        api = self._make_api()
+        self._save("test-sp")
+        config = api._call.call_args_list[0][0][1][1]
+        self.assertEqual(config["analyticsId"], "site-1")
+        self.assertEqual(config["analyticsType"], "plausible")
 
 
 if __name__ == '__main__':

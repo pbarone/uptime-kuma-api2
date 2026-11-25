@@ -20,7 +20,7 @@ fileMatchPattern: '**/*.py'
 Adapted from [ponytail](https://github.com/DietrichGebert/ponytail) by
 @DietrichGebert (MIT), trimmed to this project's constraints. The "brevity does
 not license" guards below are where it was adjusted rather than copied — three
-of its rules work against a library whose backward compatibility is a contract.
+of its rules work against a library whose public API callers depend on.
 
 The best code is the code never written. This runs *after* you understand the
 problem — read the task, trace the real flow end to end — not instead of it.
@@ -46,7 +46,7 @@ than a small fix.
 Three things brevity does **not** license here, each because it has already
 cost this repo something:
 
-- **Deleting what looks unused.** The dual `incident`/`incidents` return keys read as dead weight and are load-bearing for callers. Deletion is governed by the backward-compatibility policy below, not by diff size. (On this `v3` branch the code paths for Uptime Kuma 1.x and 2.x servers are the deliberate exception: they are removed, because this line supports 3.x only. The 2.x line on `main` keeps them.) Packaging has its own instance of this: the
+- **Deleting what looks unused.** The dual `incident`/`incidents` return keys read as dead weight. On `main` they are load-bearing for callers. On `v3` the server decides: the 3.0.0-beta.2 status page payload carries only the `incidents` list (`server/model/status_page.js`), so the singular `incident` alias does not map onto 3.x and is a candidate to drop with a BREAKING CHANGES entry, while `incidents` stays. Do not change either key outside a spec that says so. Deletion is governed by the API-change policy below, not by diff size. (On this `v3` branch the code paths for Uptime Kuma 1.x and 2.x servers are the deliberate exception: they are removed, because this line supports 3.x only. The 2.x line on `main` keeps them.) Packaging has its own instance of this: the
   `MANIFEST.in` `prune`/`global-exclude` lines — kept in tech steering, where
   the surrounding build context is; don't copy it back here.
 - **Touching fewer files than the change needs.** A new public class
@@ -72,19 +72,14 @@ raw string (`r"""`) to avoid a `SyntaxWarning` on Python 3.12+.
 ## Backward-compatibility and API-change policy
 
 The public API (anything exported from `__init__.py`, and the signatures/return
-shapes of public methods) is a contract. Before changing public behavior:
+shapes of public methods) is kept on `v3` only where it maps naturally onto Uptime Kuma 3.x. A name or shape is dropped or changed when keeping it would cost extra code or extra server calls, or would misdescribe what the 3.x server does, and each break is listed under BREAKING CHANGES in `CHANGELOG.md`. The no-removal and no-rename rule applies to the 2.x line on `main`. Before changing public behavior:
 
 1. **Support Uptime Kuma 3.x only, and keep older 3.x releases working.** On this `v3` branch the floor is Uptime Kuma 3.0. Gate behavior that differs between 3.x releases behind `parse_version(self.version)`, and add fields a later 3.x release introduced inside a version check, not unconditionally. Don't add code paths for 1.x or 2.x servers; they belong on the 2.x line on `main`.
-2. **Additive over breaking.** Prefer new optional parameters (default `None`)
-   and new return keys over changing or removing existing ones. When a server
-   renames a field across versions, return *both* the old and new keys where
-   feasible (see the `incident`/`incidents` handling) so existing callers keep
-   working.
+2. **Additive over breaking, unless Decision E says otherwise.** Prefer new optional parameters (default `None`) and new return keys over changing or removing existing ones. When a server renames a field between 3.x releases, return both the old and new keys where feasible. Do not keep an old name only to preserve it: if it does not map onto what the 3.x server returns, drop it and list the break under BREAKING CHANGES.
 3. **Don't casually add public API surface.** Each new public method/parameter
    is a permanent maintenance obligation. New *features* (vs bug fixes) are a
    deliberate decision, not a default; decline scope creep.
-4. **A genuine breaking change** requires a major version bump and a
-   `BREAKING CHANGE:` note — it is a last resort, not a convenience.
+4. **A genuine breaking change** requires a `BREAKING CHANGE:` note and a CHANGELOG entry under BREAKING CHANGES. On `v3` the 3.0 major bump already covers the breaks Decision E allows; on `main` a break needs a major bump and stays a last resort.
 5. **Record judgment calls.** Behavioral decisions (e.g. how an unparseable
    server version is treated, whether the server applies its own default
    notifications) should be documented in the changelog and, if far-reaching,

@@ -35,6 +35,8 @@ Supported Uptime Kuma versions:
 | 3.0.0-beta.2 onward  | 3.x (in development)       |
 | 1.21.3 - 2.5.12      | 2.11.0 onward, 2.x line    |
 
+The floor on this branch is Uptime Kuma 3.0, and it is live-verified against 3.0.0-beta.2, over plain HTTP and over HTTPS behind a reverse proxy. Login uses Uptime Kuma 3.x's HTTP auth (including two-factor login and `login_by_token`), and API keys, `uptime`, `avg_ping`, the compact `get_monitors` and heartbeat history work against the 3.x server. To log in with an API key, pass it as a header, `UptimeKumaApi(url, headers={"Authorization": "Bearer <key>"})`, with the server's "API and MCP" setting turned on. API keys carried over from Uptime Kuma 2.x only work on `/metrics`. The CHANGELOG lists every breaking change from the 2.x API.
+
 The 3.x line and the 2.x line can't be installed in the same Python environment. If you manage both Uptime Kuma 2.x and 3.x servers, use one environment per line. The 2.x line (2.11.1 and later) raises a clear error when you log in to an Uptime Kuma 3.x server, and the 3.x line refuses to connect to a server older than Uptime Kuma 3.0.
 
 Earlier release lines, kept as a record of what each published version was documented to support:
@@ -83,7 +85,7 @@ To do so, import `UptimeKumaApi` from the library and specify the Uptime Kuma se
 >>> api.login('INSERT_USERNAME', 'INSERT_PASSWORD')
 ```
 
-**Note on the Uptime Kuma "API key":** the *API key* you can create in the Uptime Kuma web UI is not a credential for this library. The UI "API key" cannot authenticate this socket.io API: it only grants access to Uptime Kuma's Prometheus `/metrics` endpoint. Authenticate with a username and password, or with a login token via `login_by_token()`.
+**Note on the Uptime Kuma "API key":** on Uptime Kuma 3.x, an API key created in the web UI can authenticate this library when you pass it as `UptimeKumaApi(url, headers={"Authorization": "Bearer <key>"})` and the server's "API and MCP" setting is on. Keys carried over from Uptime Kuma 2.x only grant access to the Prometheus `/metrics` endpoint. You can also authenticate with a username and password, or with a login token via `login_by_token()`.
 
 Now you can call one of the existing methods of the instance. For example create a new monitor:
 
@@ -175,10 +177,26 @@ Test files:
 | `tests/test_monitor_types_v2.py` | New monitor types (RABBITMQ, SNMP, SMTP, SYSTEM_SERVICE) |
 | `tests/test_monitor_params_v2.py` | Monitor parameters, payload shape, validation, monitor-list cache writes, unparseable server versions |
 | `tests/test_version_gates.py` | Version gating on 3.x: every former 1.x/2.x gate is unconditional, and the gating mechanism (withhold and warn, per-type floors, pre-release handling) against a synthetic 3.1 floor |
-| `tests/test_status_page_v2.py` | Status page analytics keys, ignored password and `googleAnalyticsId`, optional fields, SSL verify, the withhold-and-warn mechanism |
+| `tests/test_status_page_v2.py` | Status page analytics keys, optional fields, SSL verify, the withhold-and-warn mechanism |
 | `tests/test_notification_v2.py` | Nextcloud Talk, Brevo, Evolution API providers |
 | `tests/test_logger.py` | Logger parameter type validation |
 | `tests/test_monitor_builder.py` | MonitorBuilder fluent API |
 | `tests/test_status_page_incidents.py` | The `incident` -> `incidents` rename in Uptime Kuma 2.1.0: the `KeyError` and the silent data loss from reading only the singular key |
 | `tests/test_delete_id_coercion_v2.py` | String vs integer id in the existence guard of all seven `delete_*` methods (#91) |
 | `tests/test_monitor_cache_v2.py` | The `updateMonitorIntoList` / `deleteMonitorFromList` delta handlers and the refreshed `delete_monitor` / `delete_monitor_tag` guards |
+| `tests/test_notification_ntfy_v2.py` | ntfy notification payload building and argument checks |
+| `tests/test_important_heartbeats_v2.py` | `get_important_heartbeats()` requests history per monitor (#63) |
+| `tests/test_heartbeat_list_regression.py` | Heartbeat list events append without nesting |
+| `tests/test_uptime_kuma_3_detection.py` | Servers older than Uptime Kuma 3.0 are refused at connect time (#88) |
+| `tests/test_auth_http_v3.py` | The HTTP auth helper and the cookie reconnect |
+| `tests/test_login_v3.py` | `login()` over the HTTP auth flow: success, failure and the 429 rate limit |
+| `tests/test_session_v3.py` | `login_by_token()` and `logout()` |
+| `tests/test_twofa_v3.py` | Two-factor methods and two-factor login |
+| `tests/test_account_v3.py` | `need_setup()`, `setup()` and `change_password()` |
+| `tests/test_api_key_v3.py`, `tests/test_api_key_properties_v3.py`, `tests/test_api_key_lookup_properties_v3.py` | API-key methods, `get_api_keys()` normalization and `get_api_key()` lookup |
+| `tests/test_event_state_v3.py` | The `session`, `stats` and `heartbeatLists` events and the connection cache reset |
+| `tests/test_stats_v3.py`, `tests/test_stats_uptime_properties_v3.py`, `tests/test_stats_avg_ping_properties_v3.py`, `tests/test_stats_merge_properties_v3.py` | `uptime()` and `avg_ping()` read from the `stats` event, including property tests |
+| `tests/test_monitor_cache_v3.py`, `tests/test_monitor_cache_properties_v3.py` | The compact monitor list and `get_monitors()` |
+| `tests/test_heartbeat_lists_v3.py`, `tests/test_heartbeat_properties_v3.py` | Heartbeat history from `heartbeatLists`, including the merge property test |
+| `tests/test_live_auth_helpers_v3.py` | Offline checks of the helpers in `tests/live_test_auth_v3.py` |
+| `tests/test_dev_dependency_v3.py` | The dev-only `hypothesis` dependency wiring |
