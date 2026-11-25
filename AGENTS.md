@@ -13,11 +13,7 @@ license. **Import package:** `uptime_kuma_api` (never rename it). **PyPI name:**
 
 ## Non-negotiables
 
-- **Backward compatibility with Uptime Kuma v1.x is sacred.** The library
-  supports 1.21.3+ through 2.x from one codebase; gate server-version-specific
-  behavior behind `parse_version(self.version)`. (The lowest gate in the code is
-  `1.22`, so sub-1.22 servers take the pre-1.22 payload path — 1.21.3 is the
-  declared support floor, not the lowest branch.)
+- **This branch supports Uptime Kuma 3.x only.** This is the `v3` branch: the Uptime Kuma 3.x line during the Uptime Kuma 3.0 beta ([#88](https://github.com/pbarone/uptime-kuma-api2/issues/88)). Uptime Kuma 1.x and 2.x are supported by the 2.x line on `main` (`uptime-kuma-api2<3`), where backward compatibility with 1.x stays sacred. Here the support floor is Uptime Kuma 3.0: don't add code paths for 1.x or 2.x servers, and gate behavior that differs between 3.x releases behind `parse_version(self.version)`. Public method names, arguments and return shapes are still a contract for callers, so keep them where Uptime Kuma 3.x allows it.
 - **`pytest -m integration` deletes all data on the instance it reaches.** The
   inherited integration tests wipe every monitor, notification, proxy, tag,
   status page, docker host, maintenance and API key during setup. `pytest.ini`

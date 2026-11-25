@@ -23,18 +23,11 @@ incorporated PR authors.
 
 ## The one non-negotiable principle
 
-**Backward compatibility with Uptime Kuma v1.x is sacred.** The library
-supports Uptime Kuma 1.21.3+ through 2.x from a single codebase. Any
-server-version-specific behavior must be gated behind
-`parse_version(self.version)` checks so v1.x connections keep working. A change
-that breaks v1.x is a regression, not a feature. See the backward-compatibility
-policy in coding-standards steering before altering any public behavior.
+**On this branch: Uptime Kuma 3.x only.** This is the `v3` branch: the Uptime Kuma 3.x line during the Uptime Kuma 3.0 beta ([#88](https://github.com/pbarone/uptime-kuma-api2/issues/88)). The library supports Uptime Kuma 3.0 and later. Uptime Kuma 1.x and 2.x are supported by the 2.x line on `main` (`uptime-kuma-api2<3`), and the backward-compatibility rule for 1.x lives there. Connecting to a server older than 3.0 raises a clear error that points to `uptime-kuma-api2<3`.
 
-1.21.3 is the *declared support floor* (versions below it were dropped in
-uptime-kuma-api 1.0.0 — see `CHANGELOG.md`). It is not the lowest version the
-code branches on: the gates are `1.22`, `1.23`, `1.23.1` and `2.0`, so a server
-reporting anything below 1.22 takes the pre-1.22 payload path, which is
-intentional and still exercised by the v2 unit tests. Do not remove that path.
+Behavior that differs between 3.x releases is gated behind `parse_version(self.version)`, so older 3.x servers keep working when a later 3.x release adds a field. The public API (method names, arguments, return shapes) is still a contract for callers, including the Ansible collection: keep it stable wherever Uptime Kuma 3.x allows it. See the policy in coding-standards steering before altering any public behavior.
+
+The code paths for 1.x and 2.x servers (the pre-1.22 payload path and the `1.22`, `1.23`, `1.23.1` and `2.0` gates) are removed on this branch. They are kept on `main`.
 
 ## Audience
 
