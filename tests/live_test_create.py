@@ -46,7 +46,6 @@ from dotenv import load_dotenv
 
 load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
 
-from packaging.version import parse as parse_version
 
 from uptime_kuma_api import (
     MonitorBuilder,
@@ -181,12 +180,6 @@ def preflight(api, allow_default_notifications: bool) -> None:
     """Refuse to run where the results would be meaningless or disruptive."""
     version = api.version
     print(f"  server version: {version}")
-
-    if parse_version(version) < parse_version("2.0"):
-        raise SystemExit(
-            f"ABORT: this script tests v2-only features but the server is {version}.\n"
-            "       Point tests/.env at an Uptime Kuma 2.x instance."
-        )
 
     # Uptime Kuma attaches notifications flagged as default to every new
     # monitor. These monitors are meant to be DOWN, so a default notification

@@ -207,8 +207,8 @@ def make_api(monitor_cache=None, real=(), timeout=1):
     return api
 
 
-# The three cache writers on the socket.io read-loop thread: the v1.x full-list
-# broadcast handler and the two 2.x delta handlers. All bound for real on the
+# The three cache writers on the socket.io read-loop thread: the full-list
+# broadcast handler and the two delta handlers. All bound for real on the
 # handler harness so a test can deliver any mix of them.
 HANDLER_REAL_METHODS = (
     "_event_monitor_list",
@@ -409,8 +409,8 @@ class TestRefreshMonitorListCost(unittest.TestCase):
     it guards, because ``self.version`` is a property that routes through
     ``info()`` -> ``_get_event_data`` and pays a 0.2 s ``wait_events`` sleep to
     save a 2-6 ms round trip. That argument only holds while the helper stays a
-    single ``getMonitorList`` with no version lookup anywhere in it, on v1.x
-    sessions as much as on 2.x ones. This is the test that keeps it true.
+    single ``getMonitorList`` with no version lookup anywhere in it, on every
+    session. This is the test that keeps it true.
 
     Both halves are checked two ways, because neither way alone is sufficient:
 
@@ -443,7 +443,7 @@ class TestRefreshMonitorListCost(unittest.TestCase):
         caught by the assertion rather than derailed by a mock value.
         """
         api = make_api(cache_of(monitor(1)), real=("_refresh_monitor_list",))
-        type(api).version = _RecordingProperty("2.4.0")
+        type(api).version = _RecordingProperty("3.0.0")
         return api
 
     def test_issues_exactly_one_get_monitor_list_call(self):
@@ -635,20 +635,19 @@ class TestMonitorTagCachePatching(unittest.TestCase):
         self.assertIs(cache["1"], patched)
 
 
-class TestV1FullListBroadcastStillDrivesTheCache(unittest.TestCase):
-    """Property 2 (Preservation): v1.x inertness.
+class TestFullListBroadcastStillDrivesTheCache(unittest.TestCase):
+    """Property 2 (Preservation): the full-list handler stays as it was.
 
-    v1.x re-broadcasts the whole ``monitorList`` after every mutation and never
-    emits a delta, so ``_event_monitor_list`` remains the only thing that writes
-    the cache on a v1.x session. It stores the payload as-is, and this asserts
-    that identity -- a delta handler contributing anything on this path, or the
+    The server still sends the whole ``monitorList`` at login, and
+    ``_event_monitor_list`` stores the payload as-is. This asserts that
+    identity -- a delta handler contributing anything on this path, or the
     full-list handler starting to transform the payload, would break it.
 
     **Validates: Requirements 3.1**
     """
 
     def test_full_list_broadcast_populates_the_cache_unchanged(self):
-        """Login broadcast, then the post-mutation re-broadcast v1.x sends.
+        """Login broadcast, then a second full-list broadcast replaces it.
 
         **Validates: Requirements 3.1**
         """
@@ -661,7 +660,6 @@ class TestV1FullListBroadcastStillDrivesTheCache(unittest.TestCase):
         api._event_monitor_list(at_login)
         self.assertIs(api._event_data[Event.MONITOR_LIST], at_login)
 
-        # v1.x answers a mutation with the whole list again, not a delta
         after_add = cache_of(monitor(1), monitor(2), monitor(7))
         api._event_monitor_list(after_add)
         self.assertIs(api._event_data[Event.MONITOR_LIST], after_add)

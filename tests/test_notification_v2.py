@@ -263,7 +263,7 @@ class TestBugFDocsAndMetadata(unittest.TestCase):
         **Validates: Requirements 1.13, 2.14**
         """
         api = MagicMock(spec=UptimeKumaApi)
-        api.version = "2.4.0"
+        api.version = "3.0.0"
         api._parsed_version = UptimeKumaApi._parsed_version.__get__(api)
         build = UptimeKumaApi._build_monitor_data.__get__(api)
 
@@ -386,7 +386,7 @@ class TestBugFPreservation(unittest.TestCase):
     def _build_monitor(**kwargs) -> dict:
         """Build monitor data with a mocked api instance (no server needed)."""
         api = MagicMock(spec=UptimeKumaApi)
-        api.version = "2.4.0"
+        api.version = "3.0.0"
         api._parsed_version = UptimeKumaApi._parsed_version.__get__(api)
         build = UptimeKumaApi._build_monitor_data.__get__(api)
         return build(**kwargs)
