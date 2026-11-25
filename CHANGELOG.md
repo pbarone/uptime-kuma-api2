@@ -1,9 +1,20 @@
 ## Changelog
 ### Unreleased
 
-#### BREAKING CHANGES
+The 3.x line drops the code paths for Uptime Kuma 1.x and 2.x servers. Uptime Kuma 1.x and 2.x stay supported by the 2.x line on `main` (`uptime-kuma-api2<3`). Tracked in [#88](https://github.com/pbarone/uptime-kuma-api2/issues/88).
 
+#### BREAKING CHANGES
 - `UptimeKumaApi()` and `connect()` now raise `UptimeKumaException` when the server is older than Uptime Kuma 3.0 (1.x or 2.x), with a message saying to install `uptime-kuma-api2<3` for those servers. The check is one `GET /api/auth/ok` request after the socket connects: 1.x and 2.x answer the web UI's HTML there, 3.x answers JSON. Only that HTML answer refuses. A network error, timeout, SSL error, other status or any other body proceeds, so a 3.x server behind an unusual proxy is not refused on a guess. The 2.11.1 behavior (refuse a 3.x server at `login()`) does not carry over to this line, and `login()`, `login_by_token()` and `setup()` no longer probe the server. Uptime Kuma 3.x authentication is still not supported. Refs [#88](https://github.com/pbarone/uptime-kuma-api2/issues/88).
+
+- Every version gate whose floor was below Uptime Kuma 3.0 is removed. The behavior a 2.x server got is now what a 3.x server gets, whatever version the server reports. `parent`, `timeout`, `invertKeyword`, `gamedigGivenPortOnly`, `conditions`, `showCertificateExpiry`, the `set_settings` fields `chromeExecutable` and `nscd`, and every monitor field and monitor type that needed 2.0 to 2.5.4 are always sent and always accepted. The status page analytics keys are always sent, including when `None`. The status page `theme` defaults to `auto`. `get_important_heartbeats()` always uses the paged `monitorImportantHeartbeatListPaged` call and no longer reads the login-time event cache.
+- `save_status_page()`: `password` and `googleAnalyticsId` are still accepted and are now ignored, which is what a 2.1 or newer server already got. No public method or parameter is removed or renamed. `get_status_page()` still returns both `incident` and `incidents`.
+- The version-gating mechanism stays (`parse_version(self.version)`, the per-field floor tables, `UnsupportedFieldWarning`) with no live entries, so the first field a later 3.x release adds can be gated. `UnsupportedFieldWarning` is not emitted until then. The private registries were renamed (`_MONITOR_FIELD_RULES`, `_MONITOR_TYPE_FLOORS`, `_STATUS_PAGE_FIELD_FLOORS`), and `conditions` no longer raises on an old server because no old server is supported.
+- `run_tests.sh` now starts a single image, `louislam/uptime-kuma:3.0.0-beta.2`, instead of the 1.21.3 to 2.5.0 matrix. The integration suite cannot pass on `v3` until the authentication change lands, because login is HTTP on 3.x.
+- The live scripts that asserted a 1.x or 2.x server version are removed from `v3` (`live_test_*_v1.py`, `live_test_status_page_analytics_v2_0.py`, `live_test_late_monitor_fields_v2.py`, `live_test_important_heartbeats.py`, `live_test_ntp_oracledb_v2_5.py`, `live_test_sftp_*_v2_5.py`, and `scripts/run_disposable_kuma_sftp.ps1`). They stay on `main`. `scripts/run_disposable_kuma.ps1` now defaults to the 3.0.0-beta.2 image.
+
+#### Documentation
+
+- README, CONTRIBUTING, the PR and issue templates and the steering documents describe a 3.x-only branch. The "Version-gated fields" section of the API reference says the mechanism exists and has no entries today.
 
 ### Release 2.11.1
 A patch release. Against an Uptime Kuma 3.x server, the auth methods now fail at once with a clear error instead of a timeout. Behavior on 1.x and 2.x servers is unchanged. Uptime Kuma 3.x itself is not supported by this release line; see [#88](https://github.com/pbarone/uptime-kuma-api2/issues/88).

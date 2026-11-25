@@ -8,13 +8,14 @@ under the original MIT license.
 
 - **Import package:** `uptime_kuma_api` (never renamed — existing user code
   depends on it). **PyPI name:** `uptime-kuma-api2`.
-- Supports Uptime Kuma **1.21.3+ through 2.x from one codebase**. Server-
-  version-specific behavior is gated behind `parse_version(self.version)`
-  checks. The lowest gate in the code is `1.22`, so servers below that
-  deliberately take the pre-1.22 payload path; 1.21.3 is the declared support
-  floor, not the lowest branch.
-- **Backward compatibility with v1.x is not negotiable.** A change that breaks
-  a v1.x connection is a regression.
+- Supports Uptime Kuma **3.0 and newer**. This is the `v3` branch; Uptime Kuma
+  1.x and 2.x are supported by the 2.x line on `main` (`uptime-kuma-api2<3`).
+  Connecting to a server older than 3.0 raises an error that says so.
+- Server-version-specific behavior is gated behind `parse_version(self.version)`
+  checks and the per-field floor tables in `api.py`. No gate is live today,
+  because every field and monitor type ships in Uptime Kuma 3.0.
+- **Older 3.x releases keep working.** A change that breaks an older 3.x server
+  is a regression, so a field a later 3.x release introduces gets a floor.
 
 ## Development setup
 
@@ -55,7 +56,8 @@ integration test is excluded because it does.
 > ```
 >
 > `./run_tests.sh` is the maintained way to do it safely: it creates and
-> destroys its own containers per server version. It drives the tests through
+> destroys its own container (a 3.x image). On `v3` the suite cannot pass until
+> the authentication change lands. It drives the tests through
 > `unittest discover`, which ignores pytest markers, so it runs the full suite
 > regardless of the default above.
 
@@ -86,12 +88,13 @@ script against it, and destroys the container in a `finally` block even if the
 script raises.
 
 ```powershell
-pwsh -File scripts/run_disposable_kuma.ps1 -Script tests/live_test_v2_only_fields_v1.py
+pwsh -File scripts/run_disposable_kuma.ps1 -Script tests/live_test_<name>.py
 ```
 
-The scripts prefixed `live_test_*_v1.py` are the odd ones out and read their own
+A script written for a disposable container is the odd one out and reads its own
 `UPTIME_KUMA_V1_*` keys rather than the `tests/.env` ones, precisely so a script
-that creates monitors cannot reach a 2.x instance by misconfiguration. The runner
+that creates monitors cannot reach a real instance by misconfiguration. None ships
+on `v3` yet; the 1.x and 2.x ones stay on `main`. The runner
 sets those keys for the child process, so it needs no `tests/.env` at all. See
 `scripts/README.md`.
 

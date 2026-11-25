@@ -4,9 +4,8 @@
     remote Docker host, then destroy the container.
 
 .DESCRIPTION
-    Some verification can only be done against a real server: whether a version
-    gate is correct, what a server does with a field the library withholds, how a
-    payload round-trips. This starts a disposable container for exactly that, runs
+    Some verification can only be done against a real server: what a server does
+    with a field the library sends, how a payload round-trips. This starts a disposable container for exactly that, runs
     one script against it, and removes it again.
 
     Two properties are the point of it existing rather than doing this by hand.
@@ -28,7 +27,7 @@
     The script to run, relative to the repository root. Must exist.
 
 .PARAMETER Image
-    Container image. Defaults to the 1.23.2 image used for v1 verification.
+    Container image. Defaults to the Uptime Kuma 3.0.0-beta.2 image.
 
 .PARAMETER Port
     Host port to publish on. Defaults to 3023. Port 3001 is refused outright --
@@ -56,37 +55,13 @@
     Python executable. Defaults to the repository virtualenv.
 
 .EXAMPLE
-    pwsh -File scripts/run_disposable_kuma.ps1 -Script tests/live_test_v2_only_fields_v1.py
-
-    Probe every version-gated monitor field against a 1.23.2 server. This is the
-    run recorded in .kiro/specs/v2-only-fields-rule/v1-verification-results.md.
-
-.EXAMPLE
-    pwsh -File scripts/run_disposable_kuma.ps1 `
-        -Script tests/live_test_conditions_v1.py -Port 3024
-
-    A second script on a different port, so it can run alongside the first.
-
-.EXAMPLE
-    pwsh -File scripts/run_disposable_kuma.ps1 `
-        -Script tests/live_test_status_page_analytics_v2_0.py `
-        -Image louislam/uptime-kuma:2.0.2 -Port 3025 `
-        -DockerEnv UPTIME_KUMA_DB_TYPE=sqlite
-
-    A 2.x container. -Image has always accepted any tag; the two things a 2.x
-    run needs beyond that are not obvious and cost an hour to rediscover:
-
-    1. -DockerEnv UPTIME_KUMA_DB_TYPE=sqlite is REQUIRED. On first boot 2.x
-       serves a "setup-database" screen and does not mount socket.io until a
-       database type is chosen, so the client hangs on the handshake while
-       /socket.io/ falls through to the SPA and answers 200 with HTML.
-       Observed on 2.0.2: /api/entry-page returns {"type":"setup-database"}.
-
-    2. The readiness check below waits for HTTP 200 on /, which 2.x answers
-       before socket.io accepts. The script under test should retry its initial
-       connection for a while rather than assuming PASS ready means connectable
-       -- see connect_with_retry in live_test_status_page_analytics_v2_0.py.
-
+    pwsh -File scripts/run_disposable_kuma.ps1 -Script tests/live_test_<name>.py
+    Run one live script against a throwaway container, then remove it. Pass
+    -Port to run a second script alongside the first.
+    A first boot may serve a "setup-database" screen and not mount socket.io
+    until a database type is chosen, so the client hangs on the handshake while
+    HTTP answers 200. Pass -DockerEnv UPTIME_KUMA_DB_TYPE=sqlite for such an
+    image, and have the script under test retry its first connection.
 .NOTES
     Requires the root .env to define DOCKER-HOST and DOCKER-USER, key-based SSH
     to that host, and Docker on it. This is maintainer tooling: scripts/ ships in
@@ -99,7 +74,7 @@
     The script under test is expected to read UPTIME_KUMA_V1_URL,
     UPTIME_KUMA_V1_USERNAME and UPTIME_KUMA_V1_PASSWORD, which this runner sets
     for the child process only. Those keys are deliberately distinct from the
-    UPTIME_KUMA_* keys in tests/.env that point at a real 2.x instance, so a
+    UPTIME_KUMA_* keys in tests/.env that point at a real instance, so a
     script that creates and deletes monitors cannot reach it by misconfiguration.
     There is deliberately no option to change that prefix: making it settable
     would hand back exactly the accident the split key names exist to prevent.
@@ -109,17 +84,16 @@ param(
     [Parameter(Mandatory = $true)]
     [string]$Script,
 
-    [string]$Image = 'louislam/uptime-kuma:1.23.2',
+    [string]$Image = 'louislam/uptime-kuma:3.0.0-beta.2',
     [int]$Port = 3023,
 
     # Extra environment for the container, as KEY=VALUE strings.
     #
-    # Needed for any 2.x image: on first boot 2.x serves a "setup-database"
-    # screen and does NOT mount socket.io until a database type is chosen, so a
-    # client hangs on the handshake forever while HTTP happily answers 200.
+    # Needed when a first boot serves a "setup-database" screen and does NOT
+    # mount socket.io until a database type is chosen, so a client hangs on the
+    # handshake forever while HTTP happily answers 200.
     # UPTIME_KUMA_DB_TYPE=sqlite skips that screen (server/setup-database.js
-    # reads it to override db-config.json). Without this parameter the runner
-    # could only ever drive 1.x containers.
+    # reads it to override db-config.json).
     #
     # Only KEY names are echoed, never values -- but this is not a secret
     # channel: it lands in the remote shell command line and is visible in

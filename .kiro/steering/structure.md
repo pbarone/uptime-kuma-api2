@@ -47,7 +47,7 @@ maintains: a test needs a live server exactly when its class extends
 enumerated below — an earlier version of this section listed all nine unit files
 and was one of seven copies that had to be edited in lockstep.
 
-- **v2 unit tests** — every `tests/test_*.py` that does **not** extend
+- **Unit tests** - every `tests/test_*.py` that does **not** extend
   `UptimeKumaTestCase`. No live server; they mock the version and transport.
   **This is the CI suite**, and what a bare `pytest` runs. Add regression tests
   here; no CI or docs change is needed when you do.
@@ -58,39 +58,28 @@ and was one of seven copies that had to be edited in lockstep.
   deselected from a plain `pytest`. Never point them at anything you care about.
 - **Live scripts** (`live_test_backup.py`, `live_test_create.py`,
   `live_test_cleanup.py`, `live_test_ssl_verify.py`, `live_test_delete_id.py`):
-  manual round-trip verification against a real 2.x instance, driven by
+  manual round-trip verification against a real instance, driven by
   `tests/.env`. Not tests, not run by CI. `live_test_ssl_verify.py` additionally
   needs an endpoint with a genuinely untrusted certificate, set via
   `UPTIME_KUMA_SELFSIGNED_URL`. `live_test_delete_id.py` creates and deletes one
   monitor, so point it at a disposable instance only.
-- **Disposable-container live scripts** — the odd ones out. Each targets a
-  **throwaway container at one specific server version**, not the real 2.x
-  instance the scripts above use, and each reads its own `UPTIME_KUMA_V1_URL` /
+- **Disposable-container live scripts** - the odd ones out. None ship on `v3`
+  yet: the scripts that asserted a 1.x or 2.x server version (and their SFTP
+  runner) were removed from this branch and stay on `main`, where
+  `git show main:<path>` recovers one if a 3.x port is wanted. A script of this
+  kind targets a **throwaway container at one specific server version**, not the
+  real instance the scripts above use, and reads its own `UPTIME_KUMA_V1_URL` /
   `UPTIME_KUMA_V1_USERNAME` / `UPTIME_KUMA_V1_PASSWORD` keys rather than the
-  `tests/.env` keys, so none can accidentally hit the real target. Every one
-  refuses to run if the URL is unset (no default) and aborts unless the server
-  reports the version it is written for — a mistargeted URL fails closed rather
-  than mutating something. They create monitors or status pages, so disposable
-  instances only, and none belongs in the 2.x backup → create → cleanup cycle.
-  Run them through `scripts/run_disposable_kuma.ps1`, which starts and destroys
-  the container and keeps the Docker host out of its output.
-
-  Named by the version each asserts rather than grouped as "v1", because that
-  is what actually distinguishes them and the set is no longer one version line:
-
-  - `live_test_conditions_v1.py`, `live_test_v2_only_fields_v1.py`,
-    `live_test_status_page_v1.py` — assert `1.23`.
-  - `live_test_status_page_analytics_v2_0.py` — asserts `2.0`. A 2.x container
-    additionally needs `-DockerEnv UPTIME_KUMA_DB_TYPE=sqlite`, or it never
-    mounts socket.io; see that runner's `.EXAMPLE`.
-  - `live_test_late_monitor_fields_v2.py` — asserts one of the exact releases
-    `2.0.2`, `2.1.0`, `2.3.2`, `2.4.0`, the releases either side of each floor it
-    checks. Run once per image, with the same `-DockerEnv` as above.
-  - `live_test_important_heartbeats.py` — asserts `1.23.x`, `2.0.x` or `2.5.x`.
-    A deliberate exception to one version line per script: its assertions branch
-    on 1.x versus 2.x, and the prefix allowlist keeps it failing closed. Same
-    `-DockerEnv` for 2.x. Against an unfixed library on 2.x it is expected to
-    exit 1 in its fresh-connection phase.
+  `tests/.env` keys, so it cannot accidentally hit the real target. It must
+  refuse to run if the URL is unset (no default) and abort unless the server
+  reports the version it is written for, so a mistargeted URL fails closed
+  rather than mutating something. It creates monitors or status pages, so
+  disposable instances only, and none belongs in the backup, create, cleanup
+  cycle. Run them through `scripts/run_disposable_kuma.ps1`, which starts and
+  destroys the container (default image `louislam/uptime-kuma:3.0.0-beta.2`) and
+  keeps the Docker host out of its output. A first boot that serves the
+  `setup-database` screen needs `-DockerEnv UPTIME_KUMA_DB_TYPE=sqlite`; see that
+  runner's `.EXAMPLE`.
 
   The `UPTIME_KUMA_V1_*` key names are historical: they mean "the disposable
   container", whatever version it runs. The runner deliberately offers no way to
@@ -101,8 +90,8 @@ and was one of seven copies that had to be edited in lockstep.
 
 - New monitor type / parameter → `_build_monitor_data` and validation in
   `api.py`, the enum in `monitor_type.py`, a matching `MonitorBuilder` setter,
-  a v2 unit test, and `docs/api.rst` if a new public class.
-- New notification provider → `notification_providers.py` tables + a v2 test.
+  a unit test, and `docs/api.rst` if a new public class.
+- New notification provider -> `notification_providers.py` tables + a unit test.
 - New public class/function → export in `__init__.py` **and** add to
   `docs/api.rst` (autodoc won't include it otherwise).
 

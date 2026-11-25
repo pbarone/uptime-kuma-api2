@@ -142,5 +142,5 @@ tests and the only protection was remembering to name the nine unit files.
 
 That closes the accident but not the deliberate mistake: `-m integration`,
 `-m ""` and `unittest discover` all still reach every destructive test. Use
-`./run_tests.sh`, which creates and destroys its own containers per server
-version, or a disposable instance you are willing to lose.
+`./run_tests.sh`, which creates and destroys its own container (a 3.x image),
+or a disposable instance you are willing to lose.

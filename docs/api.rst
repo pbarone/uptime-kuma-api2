@@ -15,31 +15,26 @@ Main Interface
 Version-gated fields
 --------------------
 
-This library supports a range of Uptime Kuma server versions from one codebase,
-and some monitor fields only exist from a certain server version onward. When you
-supply a field the connected server does not implement, there is one rule:
+This version of the library supports Uptime Kuma 3.0 and newer. Every monitor
+field, monitor type and status-page field it knows is available on Uptime Kuma
+3.0, so nothing is gated today. The mechanism stays in place for the first field
+or type that a later 3.x release introduces. When a field is gated and you supply
+it to a server that does not implement it, there is one rule:
 
     **The field is left out of the payload, and you are told once per call.**
 
-    The exception is a field that would change the monitor's up/down *verdict*
-    rather than *how* the check runs. Such a field raises instead, because
-    dropping it would hand back a monitor that reports success against criteria
-    you never set. ``conditions`` is currently the only field in that category.
-
-That is the whole rule, and it applies to every version-gated monitor field on
+That rule applies to every version-gated monitor field on
 :meth:`~uptime_kuma_api.UptimeKumaApi.add_monitor` and
-:meth:`~uptime_kuma_api.UptimeKumaApi.edit_monitor` -- including any added in
-future, so the behaviour of a new field is inherited rather than decided again.
+:meth:`~uptime_kuma_api.UptimeKumaApi.edit_monitor`, so the behaviour of a new
+field is inherited rather than decided again.
 
 **How you are told.** A single :class:`UnsupportedFieldWarning` is emitted per
 call, naming every field that was withheld, the server version each one requires,
 and the version your server reports. One warning per call, not one per field.
 
 **Which fields, and from which version.** The set is internal, because it tracks
-what the server supports rather than anything you configure. You do not need to
-consult it: supply the fields you want and the warning names any your server
-cannot take. Every entry has been checked against a real 1.23.2 server rather
-than assumed.
+what the server supports rather than anything you configure. It is empty today.
+Supply the fields you want and the warning names any your server cannot take.
 
 **If you would rather it failed loudly.** Escalate the category, and a request for
 an unsupported field raises instead of being dropped, before anything is sent::
@@ -61,30 +56,19 @@ regardless of what the server would have accepted.
 
 Monitor *types* are governed separately. A type the server has no implementation
 of raises rather than being degraded, since a type is the thing being requested
-rather than a parameter whose loss can be absorbed.
+rather than a parameter whose loss can be absorbed. The table of type floors is
+empty today.
 
 **Status-page fields.** The same withhold-and-warn rule applies to
-:meth:`~uptime_kuma_api.UptimeKumaApi.save_status_page`. The gated fields are
-held in a separate internal registry (``_V2_ONLY_STATUS_PAGE_FIELDS``), and the
-version floor is ``2.1`` -- the Uptime Kuma release that introduced them.
+:meth:`~uptime_kuma_api.UptimeKumaApi.save_status_page`, with its own internal
+table of floors, also empty today. The analytics trio (``analyticsType``,
+``analyticsId``, ``analyticsScriptUrl``) will not be gated even then: the server
+requires ``analyticsType`` to be present in the payload and rejects the entire
+save when it is absent, so all three are always sent, including when ``None``.
 
-One exception: the analytics trio (``analyticsType``, ``analyticsId``,
-``analyticsScriptUrl``) is **not** gated by that registry. The server requires
-``analyticsType`` to be present in the payload and rejects the entire save when
-it is absent (verified against 2.4.0). Withholding is therefore not an available
-outcome for these fields, so from ``2.1`` onward all three are sent
-unconditionally, including when ``None``.
-
-Below ``2.1`` they are not sent at all, because the columns do not exist yet.
-A server on ``1.x`` or ``2.0.x`` reads ``googleAnalyticsId`` instead, and that is
-what the library sends there. The trio and ``googleAnalyticsId`` are therefore
-never both present: which one you get is decided by the same ``2.1`` boundary.
-
-**Maintenance and settings.** Inventoried against upstream and confirmed: these
-surfaces have no v2-only fields. Every field ``add_maintenance``,
-``edit_maintenance`` and ``set_settings`` accept today exists at both 1.23.2 and
-the latest 2.x release. No version gate is needed and none is applied.
-
+``password`` and ``googleAnalyticsId`` are still accepted by
+:meth:`~uptime_kuma_api.UptimeKumaApi.save_status_page` so existing callers keep
+working, and are ignored: the server no longer reads them.
 
 MonitorBuilder
 --------------

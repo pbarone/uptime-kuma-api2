@@ -106,44 +106,44 @@ def monitor_docstring(mode) -> str:
             - **accessKeyId** (*str*, *optional*): AccessKey Id, defaults to None
             - **secretAccessKey** (*str*, *optional*): Secret AccessKey, defaults to None
             - **sessionToken** (*str*, *optional*): Session Token, defaults to None
-        :param str, optional jsonPathOperator: JSON Path comparison operator (v2). Applicable to JSON_QUERY monitors. Defaults to None.
-        :param str, optional ipFamily: IP Family. Force IPv4 or IPv6 for network monitors (v2). Defaults to None.
-        :param bool, optional cacheBust: Cache Bust. Add a cache-busting query parameter to HTTP requests (v2). Defaults to None.
-        :param bool, optional retryOnlyOnStatusCodeFailure: Retry only on status code failure (v2). Defaults to None.
-        :param str, optional bearer_token: Bearer Token for HTTP authentication (v2). Defaults to None.
-        :param str, optional oauth_audience: OAuth Audience parameter (v2). Defaults to None.
-        :param bool, optional domainExpiryNotification: Domain Expiry Notification separate from certificate expiry (v2). Defaults to None.
-        :param bool, optional saveResponse: Save full response body (v2). Defaults to None.
-        :param bool, optional saveErrorResponse: Save error response body (v2). Defaults to None.
-        :param int, optional responseMaxLength: Maximum response body length to save, range 1-10000000 (v2). Defaults to None.
-        :param str, optional responsecheck: Response body check string (v2). Defaults to None.
-        :param int, optional ping_count: Number of pings per check for PING monitors (v2). Defaults to None.
-        :param bool, optional ping_numeric: Numeric output mode for PING monitors (v2). Defaults to None.
-        :param int, optional ping_per_request_timeout: Per-request timeout for PING monitors (v2). Defaults to None.
-        :param str, optional mqttWebsocketPath: MQTT Websocket transport path (v2). Defaults to None.
-        :param str, optional mqttCheckType: MQTT check mode, "keyword" or "json-query" (v2). Defaults to None.
-        :param str, optional subtype: Monitor subtype for SSH/Websocket (v2). Defaults to None.
-        :param str, optional wsSubprotocol: Websocket subprotocol (v2). Defaults to None.
-        :param bool, optional wsIgnoreSecWebsocketAcceptHeader: Ignore Sec-WebSocket-Accept header (v2). Defaults to None.
-        :param bool, optional remoteBrowsersToggle: Enable remote browser for Real Browser monitors (v2). Defaults to None.
-        :param str, optional remote_browser: Remote browser ID (v2). Defaults to None.
-        :param int, optional screenshot_delay: Delay before screenshot in ms for Real Browser monitors (v2). Defaults to None.
-        :param str, optional gamedigToken: Gamedig auth token (v2). Defaults to None.
-        :param str, optional protocol: Protocol selection (v2). Defaults to None.
-        :param list, optional rabbitmqNodes: RabbitMQ node list (v2). Required for RABBITMQ monitors.
-        :param str, optional rabbitmqUsername: RabbitMQ username (v2). Defaults to "".
-        :param str, optional rabbitmqPassword: RabbitMQ password (v2). Defaults to "".
-        :param str, optional snmpOid: SNMP OID to monitor (v2). Required for SNMP monitors.
-        :param str, optional snmpVersion: SNMP version, "1", "2c", or "3" (v2). Defaults to None.
-        :param str, optional snmp_v3_username: SNMPv3 username (v2). Defaults to None.
-        :param str, optional smtpSecurity: SMTP security mode, "secure", "starttls", or "nostarttls" (v2). Defaults to "starttls".
-        :param str, optional system_service_name: System service name (v2). Required for SYSTEM_SERVICE monitors.
-        :param str, optional sshUsername: SSH username (v2.5.4+). Required for SFTP monitors.
-        :param str, optional sshAuthMethod: SFTP authentication method, "password" or "privateKey" (v2.5.4+). The server treats anything other than "privateKey" as password. Defaults to None.
-        :param str, optional sshPassword: SFTP password, used unless sshAuthMethod is "privateKey" (v2.5.4+). Defaults to None.
-        :param str, optional sshPrivateKey: SFTP private key, used when sshAuthMethod is "privateKey" (v2.5.4+). Defaults to None.
-        :param str, optional sshPassphrase: Passphrase for sshPrivateKey (v2.5.4+). Defaults to None.
-        :param str, optional sftpPath: Remote path that must exist for the check to pass (v2.5.4+). Defaults to None.
+        :param str, optional jsonPathOperator: JSON Path comparison operator. Applicable to JSON_QUERY monitors. Defaults to None.
+        :param str, optional ipFamily: IP Family. Force IPv4 or IPv6 for network monitors. Defaults to None.
+        :param bool, optional cacheBust: Cache Bust. Add a cache-busting query parameter to HTTP requests. Defaults to None.
+        :param bool, optional retryOnlyOnStatusCodeFailure: Retry only on status code failure. Defaults to None.
+        :param str, optional bearer_token: Bearer Token for HTTP authentication. Defaults to None.
+        :param str, optional oauth_audience: OAuth Audience parameter. Defaults to None.
+        :param bool, optional domainExpiryNotification: Domain Expiry Notification separate from certificate expiry. Defaults to None.
+        :param bool, optional saveResponse: Save full response body. Defaults to None.
+        :param bool, optional saveErrorResponse: Save error response body. Defaults to None.
+        :param int, optional responseMaxLength: Maximum response body length to save, range 1-10000000. Defaults to None.
+        :param str, optional responsecheck: Response body check string. Defaults to None.
+        :param int, optional ping_count: Number of pings per check for PING monitors. Defaults to None.
+        :param bool, optional ping_numeric: Numeric output mode for PING monitors. Defaults to None.
+        :param int, optional ping_per_request_timeout: Per-request timeout for PING monitors. Defaults to None.
+        :param str, optional mqttWebsocketPath: MQTT Websocket transport path. Defaults to None.
+        :param str, optional mqttCheckType: MQTT check mode, "keyword" or "json-query". Defaults to None.
+        :param str, optional subtype: Monitor subtype for SSH/Websocket. Defaults to None.
+        :param str, optional wsSubprotocol: Websocket subprotocol. Defaults to None.
+        :param bool, optional wsIgnoreSecWebsocketAcceptHeader: Ignore Sec-WebSocket-Accept header. Defaults to None.
+        :param bool, optional remoteBrowsersToggle: Enable remote browser for Real Browser monitors. Defaults to None.
+        :param str, optional remote_browser: Remote browser ID. Defaults to None.
+        :param int, optional screenshot_delay: Delay before screenshot in ms for Real Browser monitors. Defaults to None.
+        :param str, optional gamedigToken: Gamedig auth token. Defaults to None.
+        :param str, optional protocol: Protocol selection. Defaults to None.
+        :param list, optional rabbitmqNodes: RabbitMQ node list. Required for RABBITMQ monitors.
+        :param str, optional rabbitmqUsername: RabbitMQ username. Defaults to "".
+        :param str, optional rabbitmqPassword: RabbitMQ password. Defaults to "".
+        :param str, optional snmpOid: SNMP OID to monitor. Required for SNMP monitors.
+        :param str, optional snmpVersion: SNMP version, "1", "2c", or "3". Defaults to None.
+        :param str, optional snmp_v3_username: SNMPv3 username. Defaults to None.
+        :param str, optional smtpSecurity: SMTP security mode, "secure", "starttls", or "nostarttls". Defaults to "starttls".
+        :param str, optional system_service_name: System service name. Required for SYSTEM_SERVICE monitors.
+        :param str, optional sshUsername: SSH username. Required for SFTP monitors.
+        :param str, optional sshAuthMethod: SFTP authentication method, "password" or "privateKey". The server treats anything other than "privateKey" as password. Defaults to None.
+        :param str, optional sshPassword: SFTP password, used unless sshAuthMethod is "privateKey". Defaults to None.
+        :param str, optional sshPrivateKey: SFTP private key, used when sshAuthMethod is "privateKey". Defaults to None.
+        :param str, optional sshPassphrase: Passphrase for sshPrivateKey. Defaults to None.
+        :param str, optional sftpPath: Remote path that must exist for the check to pass. Defaults to None.
     """
 
 
@@ -227,11 +227,11 @@ def notification_docstring(mode) -> str:
         :param int, optional ntfyPriority: Notification option for ``type`` :attr:`~.NotificationType.NTFY`.
         :param str, optional ntfyserverurl: Notification option for ``type`` :attr:`~.NotificationType.NTFY`.
         :param str ntfyIcon: Notification option for ``type`` :attr:`~.NotificationType.NTFY`.
-        :param int ntfyPriorityDown: Notification option for ``type`` :attr:`~.NotificationType.NTFY`. Priority (1-5) for DOWN notifications; ``ntfyPriority`` applies to the others. Uptime Kuma 2.x.
-        :param bool ntfyUseTemplate: Notification option for ``type`` :attr:`~.NotificationType.NTFY`. Use ``ntfyCustomTitle`` and ``ntfyCustomMessage``. Uptime Kuma 2.x.
-        :param str ntfyCustomTitle: Notification option for ``type`` :attr:`~.NotificationType.NTFY`. Custom title template, used when ``ntfyUseTemplate`` is set. Uptime Kuma 2.x.
-        :param str ntfyCustomMessage: Notification option for ``type`` :attr:`~.NotificationType.NTFY`. Custom message template, used when ``ntfyUseTemplate`` is set. Uptime Kuma 2.x.
-        :param str ntfyCall: Notification option for ``type`` :attr:`~.NotificationType.NTFY`. Value of the ntfy ``X-Call`` header: ``yes`` or a phone number. Uptime Kuma 2.x.
+        :param int ntfyPriorityDown: Notification option for ``type`` :attr:`~.NotificationType.NTFY`. Priority (1-5) for DOWN notifications; ``ntfyPriority`` applies to the others.
+        :param bool ntfyUseTemplate: Notification option for ``type`` :attr:`~.NotificationType.NTFY`. Use ``ntfyCustomTitle`` and ``ntfyCustomMessage``.
+        :param str ntfyCustomTitle: Notification option for ``type`` :attr:`~.NotificationType.NTFY`. Custom title template, used when ``ntfyUseTemplate`` is set.
+        :param str ntfyCustomMessage: Notification option for ``type`` :attr:`~.NotificationType.NTFY`. Custom message template, used when ``ntfyUseTemplate`` is set.
+        :param str ntfyCall: Notification option for ``type`` :attr:`~.NotificationType.NTFY`. Value of the ntfy ``X-Call`` header: ``yes`` or a phone number.
         :param str octopushVersion: Notification option for ``type`` :attr:`~.NotificationType.OCTOPUSH`.
         :param str, optional octopushAPIKey: Notification option for ``type`` :attr:`~.NotificationType.OCTOPUSH`.
         :param str, optional octopushLogin: Notification option for ``type`` :attr:`~.NotificationType.OCTOPUSH`.
