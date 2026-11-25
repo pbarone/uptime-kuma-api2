@@ -609,9 +609,6 @@ class UptimeKumaApi(object):
                 raise ValueError(f"ssl_verify path is not a file: {ssl_verify!r}")
         self.ssl_verify = ssl_verify
 
-        # Result of _is_uptime_kuma_3, cached after the first check. None means
-        # not checked yet.
-        self._uptime_kuma_3 = None
 
         sio_kwargs = {"ssl_verify": ssl_verify}
         if isinstance(ssl_verify, str):
@@ -874,12 +871,23 @@ class UptimeKumaApi(object):
 
         Called automatically when the UptimeKumaApi instance is created.
 
-        :raises UptimeKumaException: When connection to server failed.
+        :raises UptimeKumaException: When connection to server failed, or when
+                                     the server is older than Uptime Kuma 3.0.
         """
         try:
             self.sio.connect(f'{self.url}/socket.io/', wait_timeout=self.timeout, headers=self.headers)
         except:
             raise UptimeKumaException("unable to connect")
+        # Probed after the socket connects, not before: a 3.x server still in
+        # database setup serves HTML like 1.x/2.x but mounts no socket.io, and
+        # must report "unable to connect" rather than "older than 3.0".
+        if self._is_pre_uptime_kuma_3():
+            self.sio.disconnect()
+            raise UptimeKumaException(
+                "This server is older than Uptime Kuma 3.0 (Uptime Kuma 1.x or "
+                "2.x), which this version of uptime-kuma-api2 does not support. "
+                "Install uptime-kuma-api2<3 for Uptime Kuma 1.x and 2.x."
+            )
 
     def disconnect(self) -> None:
         """
@@ -889,46 +897,33 @@ class UptimeKumaApi(object):
         """
         self.sio.disconnect()
 
-    def _is_uptime_kuma_3(self) -> bool:
-        # Whether the server is Uptime Kuma 3.x, checked before login.
+    def _is_pre_uptime_kuma_3(self) -> bool:
+        # Whether the server is positively an Uptime Kuma older than 3.0.
         #
-        # parse_version(self.version) can't answer this: every server version
-        # sends its version only in the post-login info event. Uptime Kuma 3.0
-        # mounts Better Auth, so GET /api/auth/ok answers {"ok": true} as JSON.
-        # 1.x and 2.x have no such route and serve the web UI's HTML instead.
+        # parse_version(self.version) can't answer this: the version only
+        # arrives in the post-login info event. 1.x and 2.x answer every
+        # unknown path, including /api/auth/ok, with the web UI's index.html
+        # (HTTP 200, text/html, <title>Uptime Kuma</title>). 3.x mounts Better
+        # Auth there and answers JSON.
         #
-        # Anything other than a JSON object with "ok": true counts as "not 3.x": a
-        # network error, a non-200 status, HTML, a malformed body. So a 1.x or
-        # 2.x server, or a reverse proxy doing something unexpected, never gets
-        # a new failure from this check. Checked once per instance.
-        if self._uptime_kuma_3 is None:
-            try:
-                r = requests.get(
-                    f"{self.url}/api/auth/ok",
-                    headers=self.headers,
-                    timeout=self.timeout,
-                    verify=self.ssl_verify,
-                )
-                content_type = r.headers.get("content-type", "")
-                body = None
-                if r.status_code == 200 and content_type.startswith("application/json"):
-                    body = r.json()
-                self._uptime_kuma_3 = isinstance(body, dict) and body.get("ok") is True
-            except Exception:
-                self._uptime_kuma_3 = False
-        return self._uptime_kuma_3
-
-    def _check_not_uptime_kuma_3(self) -> None:
-        # Uptime Kuma 3.0 removed the socket.io login, loginByToken and setup
-        # events (login moved to Better Auth over HTTP). Without this check the
-        # call waits out the timeout and raises a Timeout that doesn't say why.
-        if self._is_uptime_kuma_3():
-            raise UptimeKumaException(
-                "This server is Uptime Kuma 3.x, which this version of "
-                "uptime-kuma-api2 does not support. Install uptime-kuma-api2>=3 "
-                "for Uptime Kuma 3.x."
+        # Only that HTML answer counts as "older". A network error, a timeout,
+        # an SSL error, another status, a non-HTML body, or HTML that doesn't
+        # mention Uptime Kuma (a proxy's login page) all return False, so a 3.x
+        # server behind an odd proxy is never refused on a guess.
+        try:
+            r = requests.get(
+                f"{self.url}/api/auth/ok",
+                headers=self.headers,
+                timeout=self.timeout,
+                verify=self.ssl_verify,
             )
-
+            return (
+                r.status_code == 200
+                and r.headers.get("content-type", "").startswith("text/html")
+                and "Uptime Kuma" in r.text
+            )
+        except Exception:
+            return False
     # builder
 
     @property
@@ -3773,9 +3768,7 @@ class UptimeKumaApi(object):
         :param str, optional token: 2FA Token. Required if 2FA is enabled., defaults to ""
         :return: The server response.
         :rtype: dict
-        :raises UptimeKumaException: If the server returns an error, or if the
-                                     server is Uptime Kuma 3.x, which this
-                                     version of the library does not support.
+        :raises UptimeKumaException: If the server returns an error.
 
         .. note::
 
@@ -3794,7 +3787,6 @@ class UptimeKumaApi(object):
                 'token': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VybmFtZSI6ImFkbWluIiwiaWF0IjoxNjcxMTk3MjkzfQ.lpho_LuKMnoltXOdA7-jZ98gXOU-UbEIuxMwMRm4Nz0'
             }
         """
-        self._check_not_uptime_kuma_3()
 
         # autologin
         if username is None and password is None:
@@ -3814,16 +3806,13 @@ class UptimeKumaApi(object):
         :param str token: Login token generated by :meth:`~login`
         :return: The server response.
         :rtype: dict
-        :raises UptimeKumaException: If the server returns an error, or if the
-                                     server is Uptime Kuma 3.x, which this
-                                     version of the library does not support.
+        :raises UptimeKumaException: If the server returns an error.
 
         Example::
 
             >>> api.login_by_token(token)
             {}
         """
-        self._check_not_uptime_kuma_3()
         return self._call('loginByToken', token)
 
     def logout(self) -> None:
@@ -3866,9 +3855,7 @@ class UptimeKumaApi(object):
         :param str password: Password
         :return: The server response.
         :rtype: dict
-        :raises UptimeKumaException: If the server returns an error, or if the
-                                     server is Uptime Kuma 3.x, which this
-                                     version of the library does not support.
+        :raises UptimeKumaException: If the server returns an error.
 
         Example::
 
@@ -3877,7 +3864,6 @@ class UptimeKumaApi(object):
                 'msg': 'Added Successfully.'
             }
         """
-        self._check_not_uptime_kuma_3()
         return self._call("setup", (username, password))
 
     # database
