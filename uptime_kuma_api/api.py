@@ -1768,7 +1768,6 @@ class UptimeKumaApi(object):
             published: bool = True,
             showTags: bool = False,
             domainNameList: list = None,
-            googleAnalyticsId: str = None,
             customCSS: str = "",
             footerText: str = None,
             showPoweredBy: bool = True,
@@ -1781,8 +1780,6 @@ class UptimeKumaApi(object):
             analyticsType: str = None,
             analyticsId: str = None,
             analyticsScriptUrl: str = None,
-            # accepted and ignored: the server no longer reads a status page password
-            password: str = None,
             showOnlyLastHeartbeat: bool = None,
             rssTitle: str = None,
     ) -> tuple[str, dict, str, list]:
@@ -1816,8 +1813,6 @@ class UptimeKumaApi(object):
         # server validates analyticsType and rejects the whole save with "Invalid
         # analytics type" if the key is absent; null, "google", "plausible" and
         # "umami" are accepted, while an absent key, "" and "none" are rejected.
-        # googleAnalyticsId and password are accepted by this method and ignored,
-        # so a caller that still passes them does not break.
         config["analyticsType"] = analyticsType
         config["analyticsId"] = analyticsId
         config["analyticsScriptUrl"] = analyticsScriptUrl
@@ -2674,12 +2669,14 @@ class UptimeKumaApi(object):
             >>> api.get_status_pages()
             [
                 {
+                    'analyticsId': None,
+                    'analyticsScriptUrl': None,
+                    'analyticsType': None,
                     'customCSS': '',
                     'description': 'description 1',
                     'domainNameList': [],
                     'footerText': None,
                     'icon': '/icon.svg',
-                    'googleAnalyticsId': '',
                     'id': 1,
                     'published': True,
                     'showPoweredBy': False,
@@ -2710,11 +2707,13 @@ class UptimeKumaApi(object):
 
             >>> api.get_status_page("slug1")
             {
+                'analyticsId': None,
+                'analyticsScriptUrl': None,
+                'analyticsType': None,
                 'customCSS': '',
                 'description': 'description 1',
                 'domainNameList': [],
                 'footerText': None,
-                'googleAnalyticsId': '',
                 'icon': '/icon.svg',
                 'id': 1,
                 'incident': {
@@ -2878,7 +2877,6 @@ class UptimeKumaApi(object):
         :param bool, optional published: Published, defaults to True
         :param bool, optional showTags: Show Tags, defaults to False
         :param list, optional domainNameList: Domain Names, defaults to None
-        :param str, optional googleAnalyticsId: Accepted and ignored. Uptime Kuma 2.1 and later replaced it with `analyticsType` and `analyticsId`. Defaults to None
         :param str, optional customCSS: Custom CSS, defaults to ""
         :param str, optional footerText: Custom Footer, defaults to None
         :param bool, optional showPoweredBy: Show Powered By, defaults to True
@@ -2941,7 +2939,6 @@ class UptimeKumaApi(object):
         status_page.pop("incidents", None)  # returned alongside "incident"
         status_page.pop("maintenanceList")
         status_page.pop("autoRefreshInterval", None)
-        status_page.pop("googleAnalyticsId", None)  # legacy field the server may still return
         status_page.update(
             {k: v for k, v in kwargs.items() if k not in withheld}
         )
