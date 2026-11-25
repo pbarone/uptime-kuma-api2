@@ -46,10 +46,7 @@ than a small fix.
 Three things brevity does **not** license here, each because it has already
 cost this repo something:
 
-- **Deleting what looks unused.** The pre-1.22 payload path and the dual
-  `incident`/`incidents` return keys both read as dead weight and are both
-  load-bearing. Deletion is governed by the backward-compatibility policy
-  below, not by diff size. Packaging has its own instance of this — the
+- **Deleting what looks unused.** The dual `incident`/`incidents` return keys read as dead weight and are load-bearing for callers. Deletion is governed by the backward-compatibility policy below, not by diff size. (On this `v3` branch the code paths for Uptime Kuma 1.x and 2.x servers are the deliberate exception: they are removed, because this line supports 3.x only. The 2.x line on `main` keeps them.) Packaging has its own instance of this: the
   `MANIFEST.in` `prune`/`global-exclude` lines — kept in tech steering, where
   the surrounding build context is; don't copy it back here.
 - **Touching fewer files than the change needs.** A new public class
@@ -58,9 +55,7 @@ cost this repo something:
   silently — autodoc simply omits the class, with no error anywhere.
 - **Skipping the test.** What a change needs is set by the testing steering:
   the pytest v2 unit suite, mocked version and transport, proven to fail
-  against the unfixed code, and both a v1 and a v2 version wherever behavior is
-  gated. A one-line version gate is precisely the change that needs both paths
-  covered, not the one small enough to skip.
+  against the unfixed code, and both sides of every version gate wherever behavior is gated (on this branch, two 3.x versions either side of the floor). A one-line version gate is precisely the change that needs both paths covered, not the one small enough to skip.
 
 If a deliberate simplification cuts a real corner with a known ceiling, mark it
 with a `ponytail:` comment naming the ceiling and the upgrade path, so the next
@@ -79,9 +74,7 @@ raw string (`r"""`) to avoid a `SyntaxWarning` on Python 3.12+.
 The public API (anything exported from `__init__.py`, and the signatures/return
 shapes of public methods) is a contract. Before changing public behavior:
 
-1. **Never break Uptime Kuma v1.x.** Gate server-version-specific behavior
-   behind `parse_version(self.version)`. New fields are added inside a version
-   check, not unconditionally.
+1. **Support Uptime Kuma 3.x only, and keep older 3.x releases working.** On this `v3` branch the floor is Uptime Kuma 3.0. Gate behavior that differs between 3.x releases behind `parse_version(self.version)`, and add fields a later 3.x release introduced inside a version check, not unconditionally. Don't add code paths for 1.x or 2.x servers; they belong on the 2.x line on `main`.
 2. **Additive over breaking.** Prefer new optional parameters (default `None`)
    and new return keys over changing or removing existing ones. When a server
    renames a field across versions, return *both* the old and new keys where

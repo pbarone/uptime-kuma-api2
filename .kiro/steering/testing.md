@@ -26,8 +26,7 @@ confirmed to fail against the pre-fix code.)
 
 Unit tests mock the version and transport (see `test_status_page_v2.py`,
 `test_status_page_incidents.py`) — e.g. set `api.version` and patch
-`requests.get` / the socket.io call. Test both a v1 and a v2 `version` where
-behavior is version-gated, so the backward-compat contract is covered.
+`requests.get` / the socket.io call. Where behavior is version-gated, test a `version` on each side of the gate (on this `v3` branch, two 3.x versions), so the contract for older 3.x servers is covered.
 
 ## Never wipe a real instance
 

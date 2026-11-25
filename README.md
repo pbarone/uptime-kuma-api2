@@ -1,6 +1,6 @@
 # uptime-kuma-api2
 
-A wrapper for the Uptime Kuma Socket.IO API — with full v2 support
+A wrapper for the Uptime Kuma Socket.IO API (`v3` branch: Uptime Kuma 3.x support, in development)
 ---
 
 > **About this project:** uptime-kuma-api2 is an independent continuation of
@@ -28,15 +28,14 @@ Python version 3.10+ is required. Tested on 3.10 through 3.14.
 
 Supported Uptime Kuma versions:
 
-| Uptime Kuma     | uptime-kuma-api2 |
-|-----------------|------------------|
-| 1.21.3 - 2.5.12 | 2.11.0 - 2.11.1  |
+> **This is the `v3` branch, in development.** It is the Uptime Kuma 3.x line during the Uptime Kuma 3.0 beta, and it supports **Uptime Kuma 3.x only**. Nothing from it has been released yet. For Uptime Kuma 1.x and 2.x, use the 2.x line: `pip install "uptime-kuma-api2<3"` (the `main` branch). Progress is tracked in [#88](https://github.com/pbarone/uptime-kuma-api2/issues/88).
 
-One install covers both majors — there is no separate v1 line to pin to. Server-version-specific behaviour is gated at runtime, so the same package works against a 1.x and a 2.x server.
+| Uptime Kuma          | uptime-kuma-api2           |
+|----------------------|----------------------------|
+| 3.0.0-beta.2 onward  | 3.x (in development)       |
+| 1.21.3 - 2.5.12      | 2.11.0 onward, 2.x line    |
 
-The range above is what the project tests against. The Docker matrix in `run_tests.sh` exercises the version gate boundaries across it — 1.21.3, 1.22.x, 1.23.x, 2.0.0, 2.1.0 and 2.5.0 — and this tree was additionally live-verified end to end against 1.23.2, 2.0.2 and 2.5.0. The top of the range is 2.5.12 as of 2.11.0, which adds the last pieces Uptime Kuma 2.5.1 - 2.5.4 introduced: the SFTP monitor type and the SMS Gateway, Amoot SMS and Notify! notification providers. Those were live-verified against 2.5.3, 2.5.4 and 2.5.12, including SFTP monitors connecting to a real SFTP server. The other 2.5.x releases after 2.5.4 added nothing the library needs to cover.
-
-Uptime Kuma older than 1.21.3 is **not** supported: that support was dropped in uptime-kuma-api 1.0.0. If you run one of those servers, use 0.13.0.
+The 3.x line and the 2.x line can't be installed in the same Python environment. If you manage both Uptime Kuma 2.x and 3.x servers, use one environment per line. The 2.x line (2.11.1 and later) raises a clear error when you log in to an Uptime Kuma 3.x server, and the 3.x line refuses to connect to a server older than Uptime Kuma 3.0.
 
 Earlier release lines, kept as a record of what each published version was documented to support:
 

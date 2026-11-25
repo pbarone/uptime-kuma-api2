@@ -9,8 +9,7 @@ inclusion: always
 - **Language:** Python 3.10+ (tested 3.10–3.14; matches CI and PyPI classifiers)
 - **Core dependency:** `python-socketio[client]` (the API is Socket.IO, not REST;
   a few endpoints like status-page fetch use `requests` over HTTP)
-- **Version gating:** `packaging.version.parse` — the mechanism for supporting
-  Uptime Kuma 1.x and 2.x from one codebase
+- **Version gating:** `packaging.version.parse`, used on this `v3` branch to keep older Uptime Kuma 3.x releases working when a later 3.x release adds something
 - **Packaging:** `setup.py` (version single-sourced from
   `uptime_kuma_api/__version__.py`)
 - **Docs:** Sphinx + autodoc, published on Read the Docs
@@ -25,12 +24,12 @@ dependency needs a reason beyond convenience.
 
 ## Version-gating idiom
 
-Server-version-specific behavior is gated so v1.x connections stay correct:
+Behavior that differs between Uptime Kuma 3.x releases is gated so older 3.x servers stay correct (the version below is only an example):
 
 ```python
 from packaging.version import parse as parse_version
-if parse_version(self.version) >= parse_version("2.0"):
-    ...  # v2-only fields
+if parse_version(self.version) >= parse_version("3.1"):
+    ...  # fields added in 3.1
 ```
 
 ## Key commands
@@ -109,8 +108,7 @@ relying on the working directory:
 For any question about **server** behavior — which version introduced a field, a
 monitor type, an event — the authoritative source is Uptime Kuma's own source
 and tags (`git log -S`, `git tag --contains`, `gh release view`), never a blog
-post or secondary summary. A wrong answer here becomes a wrong version gate, and
-a wrong version gate breaks v1.x.
+post or secondary summary. A wrong answer here becomes a wrong version gate, and a wrong version gate breaks older 3.x servers.
 
 Web search is for things genuinely outside these repositories: security advisory
 details, PEP text, third-party library documentation. It is not how to answer a
