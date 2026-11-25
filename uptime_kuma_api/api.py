@@ -1841,6 +1841,7 @@ class UptimeKumaApi(object):
 
         :return: A list of compact monitors.
         :rtype: list
+        :raises Timeout: If the monitor list does not arrive in time.
 
         Example::
 
@@ -2665,6 +2666,7 @@ class UptimeKumaApi(object):
 
         :return: All status pages.
         :rtype: list
+        :raises Timeout: If the status page list does not arrive in time.
 
         Example::
 
@@ -2704,6 +2706,7 @@ class UptimeKumaApi(object):
         :return: The status page.
         :rtype: dict
         :raises UptimeKumaException: If the server returns an error.
+        :raises Timeout: If the server does not answer.
 
         Example::
 
@@ -2888,6 +2891,7 @@ class UptimeKumaApi(object):
         :return: The server response.
         :rtype: dict
         :raises UptimeKumaException: If the server returns an error.
+        :raises Timeout: If the server does not answer.
 
         Example::
 
@@ -3032,7 +3036,7 @@ class UptimeKumaApi(object):
 
         :return: The heartbeats for each monitor id.
         :rtype: dict
-        :raises Timeout: If the server does not send the history in time.
+        :raises Timeout: If the monitor list or the heartbeat history does not arrive in time.
 
         Example::
 
@@ -3131,8 +3135,13 @@ class UptimeKumaApi(object):
         24 hours (``24``), 30 days (``720``) and one year (``"1y"``). A value is
         ``None`` when the monitor has no completed check in that window.
 
-        :return: The average ping for each monitor id.
+        The server sends these stats after login, so the stats of a monitor
+        created after login arrive after the next login or the server's
+        periodic refresh.
+
+        :return: ``{monitor id: {24: <ms>, 720: <ms>, "1y": <ms>}}``
         :rtype: dict
+        :raises Timeout: If the monitor list or the stats do not arrive in time.
 
         Example::
 
@@ -3324,8 +3333,13 @@ class UptimeKumaApi(object):
         Each monitor id maps to the uptime ratio (0 to 1, as the server sends it)
         over the last 24 hours (``24``), 30 days (``720``) and one year (``"1y"``).
 
-        :return: Monitor uptime.
+        The server sends these stats after login, so the stats of a monitor
+        created after login arrive after the next login or the server's
+        periodic refresh.
+
+        :return: ``{monitor id: {24: <ratio>, 720: <ratio>, "1y": <ratio>}}``
         :rtype: dict
+        :raises Timeout: If the monitor list or the stats do not arrive in time.
 
         Example::
 
@@ -3694,7 +3708,7 @@ class UptimeKumaApi(object):
         :param str new_password: New password
         :return: ``{"msg": "Password has been updated successfully."}``
         :rtype: dict
-        :raises UptimeKumaException: If the session is not logged in, or the server returns an error (for example a wrong current password).
+        :raises UptimeKumaException: If the session is not logged in ("the session is not logged in"), the server rate limits the request (HTTP 429), or the server returns an error (for example a wrong current password).
 
         Other sessions of the user stay signed in.
 
@@ -3758,7 +3772,7 @@ class UptimeKumaApi(object):
 
         :return: ``{"status": <bool>}``, read from the current Better Auth session.
         :rtype: dict
-        :raises UptimeKumaException: If the session is not logged in or the server returns an error.
+        :raises UptimeKumaException: If the session is not logged in ("the session is not logged in"), the server rate limits the request (HTTP 429), or the server returns an error.
 
         Example::
 
@@ -3779,7 +3793,7 @@ class UptimeKumaApi(object):
         :param str password: Current password.
         :return: ``{"uri": <otpauth URI>}``. Backup codes returned by the server are not included.
         :rtype: dict
-        :raises UptimeKumaException: If the session is not logged in or the server returns an error.
+        :raises UptimeKumaException: If the session is not logged in ("the session is not logged in"), the password is wrong, the server did not return a 2FA URI, the server rate limits the request (HTTP 429), or the server returns an error.
 
         Example::
 
@@ -3815,7 +3829,7 @@ class UptimeKumaApi(object):
         :param str password: Not sent. Kept for compatibility with earlier versions.
         :return: ``{"valid": True}``.
         :rtype: dict
-        :raises UptimeKumaException: If the session is not logged in, or the server rejects the token.
+        :raises UptimeKumaException: If the session is not logged in ("the session is not logged in"), the server rejects the token, or the server rate limits the request (HTTP 429).
 
         Example::
 
@@ -3842,7 +3856,7 @@ class UptimeKumaApi(object):
         :param str password: Not sent. Kept for compatibility with earlier versions.
         :return: ``{"msg": "2FA Enabled."}``.
         :rtype: dict
-        :raises UptimeKumaException: If 2FA is not enabled yet, the session is not logged in, or the server returns an error.
+        :raises UptimeKumaException: If 2FA is not enabled yet (call :meth:`verify_token` first), the session is not logged in ("the session is not logged in"), the server rate limits the request (HTTP 429), or the server returns an error.
 
         Example::
 
@@ -3862,7 +3876,7 @@ class UptimeKumaApi(object):
         :param str password: Current password.
         :return: ``{"msg": "2FA Disabled."}``.
         :rtype: dict
-        :raises UptimeKumaException: If the session is not logged in or the server returns an error.
+        :raises UptimeKumaException: If the session is not logged in ("the session is not logged in"), the password is wrong, the server rate limits the request (HTTP 429), or the server returns an error.
 
         Example::
 
@@ -3890,17 +3904,21 @@ class UptimeKumaApi(object):
         :param str, optional token: 2FA Token. Required if 2FA is enabled., defaults to None
         :return: ``{"token": <session cookie value>}``. The value can be passed to :meth:`~login_by_token`. An empty dict if disableAuth is enabled.
         :rtype: dict
-        :raises UptimeKumaException: If the server returns an error, or a 2FA token is required and none was given.
+        :raises UptimeKumaException: If the server returns an error (for example wrong credentials), a 2FA token is required and none was given, the server did not return a session cookie, or the server rate limits the request (HTTP 429, Better Auth allows 10 requests per 60 seconds).
         :raises Timeout: If the server does not answer, or does not send ``session`` when logging in without credentials.
 
         .. note::
             Better Auth allows 10 requests per 60 seconds, so repeated logins can be rate limited.
 
         .. note::
-            An API key created on Uptime Kuma 3.0 can authenticate the socket.io
-            API through an ``Authorization: Bearer <key>`` header (passed as
-            ``headers``) when the server's apiEnabled setting is on. Use
-            :meth:`~add_api_key` to create one.
+            An API key created on Uptime Kuma 3.x can authenticate the socket
+            through an ``Authorization: Bearer <key>`` header, passed when the
+            connection is created, as
+            ``UptimeKumaApi(url, headers={"Authorization": "Bearer <key>"})``.
+            This works when the server's "API and MCP" setting (``apiEnabled``)
+            is on, and no :meth:`login` call is needed. Create a key with
+            :meth:`~add_api_key`. Keys carried over from Uptime Kuma 2.x work
+            only on the ``/metrics`` endpoint.
 
         Example::
 
@@ -3910,6 +3928,9 @@ class UptimeKumaApi(object):
             {
                 'token': 'bYq6P1h6e0Lw1l3o8x3V9dWc0n2JtTqk.2f9Q...'
             }
+
+            >>> # with an API key instead of a login
+            >>> api = UptimeKumaApi(url, headers={"Authorization": "Bearer uk_9XPRjV7ilGj9CvWRKYiBPq9GLtQs74UzTxKfCxWY"})
         """
         # no credentials: disableAuth makes the server send "session" at connect
         if username is None and password is None:
@@ -3934,6 +3955,7 @@ class UptimeKumaApi(object):
         self._session_cookie = cookie_value
         self._reconnect_with_cookie(cookie_value)
         return {"token": cookie_value}
+
     def login_by_token(self, token: str) -> dict:
         """
         Login by token.
@@ -3943,14 +3965,16 @@ class UptimeKumaApi(object):
         is also what :meth:`~logout` signs out.
 
         :param str token: Login token generated by :meth:`~login`
-        :return: ``{"token": <token>}``
+        :return: ``{"token": <token>}``, the token that was passed in.
         :rtype: dict
-        :raises UptimeKumaException: If the server does not authenticate the socket with this token.
+        :raises UptimeKumaException: If no token is given, or the server does not authenticate the socket with this token.
         :raises Timeout: If the server does not answer.
 
         Example::
 
-            >>> api.login_by_token(token)
+            >>> token = api.login("admin", "secret123")["token"]
+            >>> api2 = UptimeKumaApi("http://127.0.0.1:3001")
+            >>> api2.login_by_token(token)
             {
                 'token': 'bYq6P1h6e0Lw1l3o8x3V9dWc0n2JtTqk.2f9Q...'
             }
@@ -3990,7 +4014,7 @@ class UptimeKumaApi(object):
 
         :return: None
         :rtype: None
-        :raises UptimeKumaException: If the session is not logged in, or the server returns an error.
+        :raises UptimeKumaException: If the session is not logged in ("the session is not logged in"), the server rate limits the request (HTTP 429), or the server returns an error.
 
         Example::
 
@@ -3999,15 +4023,17 @@ class UptimeKumaApi(object):
         self._auth_request("POST", "/api/auth/sign-out", use_session_cookie=True)
         self._session_cookie = None
         self._auth_session.cookies.clear()
+
     # setup
 
     def need_setup(self) -> bool:
         """
-        Check if the server has already been set up.
+        Check if the server still needs to be set up.
 
-        :return: The server response.
+        :return: ``True`` if no user exists yet, ``False`` if the server is already set up.
         :rtype: bool
         :raises UptimeKumaException: If the server returns an error.
+        :raises Timeout: If the server does not answer.
 
         Example::
 
@@ -4024,11 +4050,11 @@ class UptimeKumaApi(object):
         :param str password: Password
         :return: ``{"msg": "Added Successfully."}``
         :rtype: dict
-        :raises UptimeKumaException: If the server is already set up, or returns an error.
+        :raises UptimeKumaException: If the server is already set up, the server rate limits the request (HTTP 429), or the server returns an error.
 
         Example::
 
-            >>> api.setup(username, password)
+            >>> api.setup("admin", "secret123")
             {
                 'msg': 'Added Successfully.'
             }
@@ -4750,6 +4776,7 @@ class UptimeKumaApi(object):
         :return: All api keys.
         :rtype: list
         :raises UptimeKumaException: If the server returns an error.
+        :raises Timeout: If the server does not answer.
 
         Example::
 
@@ -4791,7 +4818,8 @@ class UptimeKumaApi(object):
         :type id_: int or str
         :return: The api key.
         :rtype: dict
-        :raises UptimeKumaException: If the api key does not exist.
+        :raises UptimeKumaException: If the api key does not exist or the server returns an error.
+        :raises Timeout: If the server does not answer.
 
         Example::
 
@@ -4815,11 +4843,16 @@ class UptimeKumaApi(object):
         """
         Adds a new api key.
 
+        A key created on Uptime Kuma 3.x can authenticate the socket through
+        ``UptimeKumaApi(url, headers={"Authorization": "Bearer <key>"})`` when
+        the server's "API and MCP" (``apiEnabled``) setting is on.
+
         :param str name: Name of the api key.
-        :param str, optional expires: Expiration date of the api key. Set to ``None`` to disable expiration.
-        :return: The server response. ``key`` is the secret and is shown only once.
+        :param str, optional expires: Expiration date of the api key. Set to ``None`` to disable expiration., defaults to None
+        :return: The server response. ``key`` is the secret and is shown only once, ``keyID`` is the id of the new key.
         :rtype: dict
         :raises UptimeKumaException: If the server returns an error.
+        :raises Timeout: If the server does not answer.
 
         Example::
 
@@ -4853,6 +4886,7 @@ class UptimeKumaApi(object):
         :return: The server response.
         :rtype: dict
         :raises UptimeKumaException: If the api key does not exist or the server returns an error.
+        :raises Timeout: If the server does not answer.
 
         Example::
 

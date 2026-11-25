@@ -10,6 +10,32 @@ Main Interface
     :inherited-members:
 
 
+.. _auth-v3:
+
+Authentication on Uptime Kuma 3.x
+---------------------------------
+
+**Password login.** :meth:`~uptime_kuma_api.UptimeKumaApi.login` signs in through Better Auth over HTTP and then reconnects the Socket with the session cookie. Because the Socket is replaced, do not rely on event data received before ``login``: read it again after logging in. Statistics (``uptime``, ``avgPing``) for a monitor created after login only arrive after the next login or the server's periodic refresh, which runs every 15 minutes (``server/monitor-stats.ts``).
+
+**Rate limit.** Better Auth allows 10 requests per 60 seconds. Repeated ``login`` calls, for example in a loop or a retry storm, can exhaust that budget, and the server then rejects further sign-in attempts until the window passes. Log in once and reuse the connection.
+
+**Tokens.** :meth:`~uptime_kuma_api.UptimeKumaApi.login_by_token` is supported on 3.x. Pass the token that ``login`` returned, which is the value of the ``better-auth.session_token`` cookie. Better Auth rotates that cookie when two-factor settings change, and the library keeps the rotated one. ``login`` has no ``api_key`` parameter.
+
+**API keys.** A key created on Uptime Kuma 3.x authenticates the Socket when you send it as a bearer header on the connection. The server only accepts it when the "API and MCP" setting (``apiEnabled``, Settings -> General) is on::
+
+    from uptime_kuma_api import UptimeKumaApi
+
+    with UptimeKumaApi(
+        "http://127.0.0.1:3001",
+        headers={"Authorization": "Bearer INSERT_API_KEY"},
+    ) as api:
+        print(api.get_monitors())
+
+No call to ``login`` is needed in that case.
+
+**Legacy keys.** Keys carried over from Uptime Kuma 2.x are listed as Legacy API Keys. They work only on the Prometheus ``/metrics`` endpoint, not on the Socket (see louislam/uptime-kuma#8258).
+
+
 .. _v2-only-fields:
 
 Version-gated fields
@@ -66,9 +92,8 @@ table of floors, also empty today. The analytics trio (``analyticsType``,
 requires ``analyticsType`` to be present in the payload and rejects the entire
 save when it is absent, so all three are always sent, including when ``None``.
 
-``password`` and ``googleAnalyticsId`` are still accepted by
-:meth:`~uptime_kuma_api.UptimeKumaApi.save_status_page` so existing callers keep
-working, and are ignored: the server no longer reads them.
+``password`` and ``googleAnalyticsId`` are no longer parameters of
+:meth:`~uptime_kuma_api.UptimeKumaApi.save_status_page`: the 3.x server does not read them, so they were removed rather than accepted and ignored.
 
 MonitorBuilder
 --------------
