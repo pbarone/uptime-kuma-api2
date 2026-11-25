@@ -239,6 +239,18 @@ def gen_secret(length: int) -> str:
     return ''.join(random.choice(chars) for _ in range(length))
 
 
+# The eleven fields of CompactMonitor in server/compact-monitor.ts (Uptime Kuma
+# 3.0.0-beta.2), which is all the login-time monitorList carries.
+_COMPACT_MONITOR_FIELDS = (
+    "id", "name", "type", "active", "parent", "childrenIDs",
+    "tags", "path", "pathName", "interval", "weight",
+)
+
+
+def _to_compact_monitor(monitor: dict) -> dict:
+    return {k: monitor[k] for k in _COMPACT_MONITOR_FIELDS if k in monitor}
+
+
 def _convert_monitor_return(monitor) -> None:
     if isinstance(monitor["notificationIDList"], dict):
         monitor["notificationIDList"] = [int(i) for i in monitor["notificationIDList"].keys()]
@@ -1802,9 +1814,17 @@ class UptimeKumaApi(object):
 
     def get_monitors(self) -> list[dict]:
         """
-        Get all monitors.
+        Get all monitors in compact form.
 
-        :return: A list of monitors.
+        Uptime Kuma 3.x sends only a compact record per monitor, so this method
+        returns the eleven compact fields and nothing else, without a
+        ``getMonitor`` request per monitor. A field the server did not send is
+        left out of the dict. To get full records, call :meth:`get_monitor` for
+        each id::
+
+            [api.get_monitor(m["id"]) for m in api.get_monitors()]
+
+        :return: A list of compact monitors.
         :rtype: list
 
         Example::
@@ -1812,85 +1832,23 @@ class UptimeKumaApi(object):
             >>> api.get_monitors()
             [
                 {
-                    'accepted_statuscodes': ['200-299'],
                     'active': True,
-                    'authDomain': None,
-                    'authMethod': <AuthMethod.NONE: ''>,
-                    'authWorkstation': None,
-                    'basic_auth_pass': None,
-                    'basic_auth_user': None,
-                    'body': None,
                     'childrenIDs': [],
-                    'databaseConnectionString': None,
-                    'databaseQuery': None,
-                    'description': None,
-                    'dns_last_result': None,
-                    'dns_resolve_server': '1.1.1.1',
-                    'dns_resolve_type': 'A',
-                    'conditions': [],
-                    'docker_container': None,
-                    'docker_host': None,
-                    'expiryNotification': False,
-                    'forceInactive': False,
-                    'game': None,
-                    'grpcBody': None,
-                    'grpcEnableTls': False,
-                    'grpcMetadata': None,
-                    'grpcMethod': None,
-                    'grpcProtobuf': None,
-                    'grpcServiceName': None,
-                    'grpcUrl': None,
-                    'headers': None,
-                    'hostname': None,
-                    'httpBodyEncoding': 'json',
                     'id': 1,
-                    'ignoreTls': False,
-                    'includeSensitiveData': True,
                     'interval': 60,
-                    'keyword': None,
-                    'maintenance': False,
-                    'maxredirects': 10,
-                    'maxretries': 0,
-                    'method': 'GET',
-                    'mqttPassword': None,
-                    'mqttSuccessMessage': None,
-                    'mqttTopic': None,
-                    'mqttUsername': None,
                     'name': 'monitor 1',
-                    'notificationIDList': [1, 2],
-                    'packetSize': 56,
                     'parent': None,
+                    'path': ['monitor 1'],
                     'pathName': 'monitor 1',
-                    'port': None,
-                    'proxyId': None,
-                    'pushToken': None,
-                    'radiusCalledStationId': None,
-                    'radiusCallingStationId': None,
-                    'radiusPassword': None,
-                    'radiusSecret': None,
-                    'radiusUsername': None,
-                    'resendInterval': 0,
-                    'retryInterval': 60,
                     'tags': [],
-                    'tlsCa': None,
-                    'tlsCert': None,
-                    'tlsKey': None,
                     'type': <MonitorType.HTTP: 'http'>,
-                    'upsideDown': False,
-                    'url': 'http://127.0.0.1',
                     'weight': 2000
                 }
             ]
         """
-
-        # TODO: replace with getMonitorList?
-
-        r = list(self._get_event_data(Event.MONITOR_LIST).values())
-        for monitor in r:
-            _convert_monitor_return(monitor)
+        r = [_to_compact_monitor(m) for m in self._get_event_data(Event.MONITOR_LIST).values()]
         int_to_bool(r, ["active"])
         parse_monitor_type(r)
-        parse_auth_method(r)
         return r
 
     def get_monitor(self, id_: int) -> dict:

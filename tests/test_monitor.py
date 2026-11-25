@@ -36,12 +36,13 @@ class TestMonitor(UptimeKumaTestCase):
         # get monitors
         monitors = self.api.get_monitors()
         self.assertTrue(type(monitors[0]["type"]) == MonitorType)
-        self.assertTrue(type(monitors[0]["authMethod"]) == AuthMethod)
         monitor = self.find_by_id(monitors, monitor_id)
-        self.assertTrue(type(monitor["type"]) == MonitorType)
-        self.assertTrue(type(monitor["authMethod"]) == AuthMethod)
         self.assertIsNotNone(monitor)
-        self.compare(monitor, expected_monitor)
+        self.assertTrue(type(monitor["type"]) == MonitorType)
+        # get_monitors returns the compact fields only
+        self.assertNotIn("authMethod", monitor)
+        self.assertEqual(monitor["name"], expected_monitor["name"])
+        self.assertEqual(monitor["interval"], expected_monitor["interval"])
 
         # edit monitor
         expected_monitor["type"] = MonitorType.PING
