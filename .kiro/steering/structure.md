@@ -47,7 +47,7 @@ maintains: a test needs a live server exactly when its class extends
 enumerated below — an earlier version of this section listed all nine unit files
 and was one of seven copies that had to be edited in lockstep.
 
-- **Unit tests** — every `tests/test_*.py` that does **not** extend
+- **Unit tests** - every `tests/test_*.py` that does **not** extend
   `UptimeKumaTestCase`. No live server; they mock the version and transport.
   **This is the CI suite**, and what a bare `pytest` runs. Add regression tests
   here; no CI or docs change is needed when you do.
@@ -63,7 +63,7 @@ and was one of seven copies that had to be edited in lockstep.
   needs an endpoint with a genuinely untrusted certificate, set via
   `UPTIME_KUMA_SELFSIGNED_URL`. `live_test_delete_id.py` creates and deletes one
   monitor, so point it at a disposable instance only.
-- **Disposable-container live scripts** — the odd ones out. None ship on `v3`
+- **Disposable-container live scripts** - the odd ones out. None ship on `v3`
   yet: the scripts that asserted a 1.x or 2.x server version (and their SFTP
   runner) were removed from this branch and stay on `main`, where
   `git show main:<path>` recovers one if a 3.x port is wanted. A script of this
@@ -91,7 +91,7 @@ and was one of seven copies that had to be edited in lockstep.
 - New monitor type / parameter → `_build_monitor_data` and validation in
   `api.py`, the enum in `monitor_type.py`, a matching `MonitorBuilder` setter,
   a unit test, and `docs/api.rst` if a new public class.
-- New notification provider → `notification_providers.py` tables + a unit test.
+- New notification provider -> `notification_providers.py` tables + a unit test.
 - New public class/function → export in `__init__.py` **and** add to
   `docs/api.rst` (autodoc won't include it otherwise).
 
