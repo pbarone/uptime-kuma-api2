@@ -154,13 +154,22 @@ class TestAuthCallsDoNotProbe(unittest.TestCase):
         get.side_effect = AssertionError("auth calls must not probe")
         api, _ = _construct_unconnected()
         api._call = MagicMock(return_value={"token": "t"})
-        api.login("admin", "secret")
-        api.login_by_token("token")
+        # login goes over Better Auth HTTP now, not the "login" socket event
+        def fake_auth_request(method, path, json_body=None, **kwargs):
+            api._auth_session.cookies.set("better-auth.session_token", "cookie")
+            return {}
+        api._auth_request = MagicMock(side_effect=fake_auth_request)
+        api._reconnect_with_cookie = MagicMock()
+        self.assertEqual(api.login("admin", "secret"), {"token": "cookie"})
+        # login_by_token reconnects with the cookie, not the removed socket event
+        self.assertEqual(api.login_by_token("token"), {"token": "token"})
+        api._reconnect_with_cookie.assert_called_with("token")
+        # setup goes over HTTP now, not the "setup" socket event
+        api._auth_request.reset_mock(side_effect=True)
         api.setup("admin", "secret")
-        self.assertEqual(
-            [c.args[0] for c in api._call.call_args_list],
-            ["login", "loginByToken", "setup"],
-        )
+        api._auth_request.assert_called_once_with(
+            "POST", "/api/setup", {"username": "admin", "password": "secret"})
+        api._call.assert_not_called()
         get.assert_not_called()
 
 

@@ -623,6 +623,13 @@ class UptimeKumaApi(object):
             sio_kwargs["logger"] = logger
         self.sio = socketio.Client(**sio_kwargs)
 
+        # Separate from the engineio http_session above: Better Auth cookies must
+        # not leak into the socket.io transport's own requests.
+        self._auth_session = requests.Session()
+        self._auth_session.verify = self.ssl_verify
+        self._auth_session.headers.update(self.headers or {})
+        self._session_cookie = None
+
         self._dashboard_rendered_sent = False
         self._reset_event_cache()
 
@@ -642,7 +649,6 @@ class UptimeKumaApi(object):
         self.sio.on(Event.INFO, self._event_info)
         self.sio.on(Event.CERT_INFO, self._event_cert_info)
         self.sio.on(Event.DOCKER_HOST_LIST, self._event_docker_host_list)
-        self.sio.on(Event.AUTO_LOGIN, self._event_auto_login)
         self.sio.on(Event.INIT_SERVER_TIMEZONE, self._event_init_server_timezone)
         self.sio.on(Event.MAINTENANCE_LIST, self._event_maintenance_list)
         self.sio.on(Event.API_KEY_LIST, self._event_api_key_list)
@@ -697,7 +703,6 @@ class UptimeKumaApi(object):
             Event.INFO: None,
             Event.CERT_INFO: None,
             Event.DOCKER_HOST_LIST: None,
-            Event.AUTO_LOGIN: None,
             Event.MAINTENANCE_LIST: None,
             Event.API_KEY_LIST: None,
             Event.SESSION: None,
@@ -870,9 +875,6 @@ class UptimeKumaApi(object):
     def _event_docker_host_list(self, data) -> None:
         self._event_data[Event.DOCKER_HOST_LIST] = data
 
-    def _event_auto_login(self) -> None:
-        self._event_data[Event.AUTO_LOGIN] = True
-
     def _event_session(self, *args) -> None:
         # sent at connect time when the server runs with disableAuth
         self._event_data[Event.SESSION] = True
@@ -931,6 +933,56 @@ class UptimeKumaApi(object):
                 "Install uptime-kuma-api2<3 for Uptime Kuma 1.x and 2.x."
             )
 
+    def _auth_request(self, method: str, path: str, json_body=None, *, use_session_cookie: bool = False) -> dict:
+        # One funnel for every Better Auth HTTP call. Messages never include the
+        # request body, cookies or raw response text.
+        if use_session_cookie and self._session_cookie is None:
+            raise UptimeKumaException("the session is not logged in")
+        try:
+            r = self._auth_session.request(
+                method,
+                f"{self.url}{path}",
+                json=json_body,
+                headers={"Origin": self.url},
+                timeout=self.timeout,
+            )
+        except requests.exceptions.Timeout as e:
+            raise Timeout(f"request to {path} timed out") from e
+        except requests.exceptions.RequestException as e:
+            raise UptimeKumaException(f"request to {path} failed ({type(e).__name__})") from None
+        if r.status_code == 429:
+            raise UptimeKumaException(
+                "rate limited by the server (Better Auth allows 10 requests per 60 seconds)"
+            )
+        try:
+            body = r.json() if r.content else {}
+        except ValueError:
+            raise UptimeKumaException(f"invalid response from {path}") from None
+        if not isinstance(body, dict):
+            body = {}
+        if not (200 <= r.status_code < 300):
+            message = body.get("message") or body.get("msg")
+            if not isinstance(message, str) or not message:
+                message = f"{path} failed with status {r.status_code}"
+            raise UptimeKumaException(message)
+        return body
+
+    def _reconnect_with_cookie(self, cookie_value: str) -> None:
+        # The server reads the session cookie once, at the socket handshake, so
+        # the socket is reopened with the cookie instead of authenticating live.
+        # sio.connect is called directly, not connect(): the pre-3.0 probe in
+        # connect() already ran when this instance was created, and this server
+        # has since answered Better Auth requests, so it is known to be 3.x.
+        self.sio.disconnect()
+        headers = dict(self.headers or {})
+        headers["Cookie"] = f"better-auth.session_token={cookie_value}"
+        self._reset_event_cache()
+        try:
+            self.sio.connect(f'{self.url}/socket.io/', wait_timeout=self.timeout, headers=headers)
+        except Exception:
+            raise UptimeKumaException("unable to connect") from None
+        with self.wait_for_event(Event.INFO):
+            pass
     def disconnect(self) -> None:
         """
         Disconnects from Uptime Kuma.
@@ -3637,9 +3689,11 @@ class UptimeKumaApi(object):
 
         :param str old_password: Old password
         :param str new_password: New password
-        :return: The server response.
+        :return: ``{"msg": "Password has been updated successfully."}``
         :rtype: dict
-        :raises UptimeKumaException: If the server returns an error.
+        :raises UptimeKumaException: If the session is not logged in, or the server returns an error (for example a wrong current password).
+
+        Other sessions of the user stay signed in.
 
         Example::
 
@@ -3651,10 +3705,12 @@ class UptimeKumaApi(object):
                 'msg': 'Password has been updated successfully.'
             }
         """
-        return self._call('changePassword', {
+        self._auth_request("POST", "/api/auth/change-password", {
             "currentPassword": old_password,
             "newPassword": new_password,
-        })
+            "revokeOtherSessions": False,
+        }, use_session_cookie=True)
+        return {"msg": "Password has been updated successfully."}
 
     def upload_backup(self, json_data: str, import_handle: str = "skip") -> dict:
         """
@@ -3688,13 +3744,18 @@ class UptimeKumaApi(object):
 
     # 2FA
 
+    def _twofa_request(self, path: str, json_body=None) -> dict:
+        # Two-factor calls need the logged-in session cookie. A GET carries no body.
+        method = "GET" if json_body is None else "POST"
+        return self._auth_request(method, path, json_body, use_session_cookie=True)
+
     def twofa_status(self) -> dict:
         """
         Get current 2FA status.
 
-        :return: The server response.
+        :return: ``{"status": <bool>}``, read from the current Better Auth session.
         :rtype: dict
-        :raises UptimeKumaException: If the server returns an error.
+        :raises UptimeKumaException: If the session is not logged in or the server returns an error.
 
         Example::
 
@@ -3703,16 +3764,19 @@ class UptimeKumaApi(object):
                 'status': False
             }
         """
-        return self._call('twoFAStatus')
+        resp = self._twofa_request("/api/auth/get-session")
+        user = resp.get("user")
+        return {"status": bool(isinstance(user, dict) and user.get("twoFactorEnabled"))}
 
     def prepare_2fa(self, password: str) -> dict:
         """
-        Prepare 2FA configuration.
+        Prepare 2FA configuration. The server creates the secret and stores it
+        as unverified. Call :meth:`verify_token` with a code from it to turn 2FA on.
 
         :param str password: Current password.
-        :return: The server response.
+        :return: ``{"uri": <otpauth URI>}``. Backup codes returned by the server are not included.
         :rtype: dict
-        :raises UptimeKumaException: If the server returns an error.
+        :raises UptimeKumaException: If the session is not logged in or the server returns an error.
 
         Example::
 
@@ -3733,17 +3797,22 @@ class UptimeKumaApi(object):
             >>> secret
             NBGVQNSNNRXWQ3LJJN4DIWSWIIYW45CZJRXXORSNOY3USSKXO5RG4MDPI5ZUK5CWJFIFOVCBGZVG24TSJ5LDE2BTMRLXOZBSJF3TISA
         """
-        return self._call('prepare2FA', password)
+        resp = self._twofa_request("/api/auth/two-factor/enable", {"password": password})
+        uri = resp.get("totpURI")
+        if not uri:
+            raise UptimeKumaException("the server did not return a 2FA URI")
+        return {"uri": uri}
 
     def verify_token(self, token: str, password: str) -> dict:
         """
-        Verify the provided 2FA token.
+        Verify the provided 2FA token. On Uptime Kuma 3.x this step also turns
+        2FA on for the account.
 
         :param str token: 2FA token.
-        :param str password: Current password.
-        :return: The server response.
+        :param str password: Not sent. Kept for compatibility with earlier versions.
+        :return: ``{"valid": True}``.
         :rtype: dict
-        :raises UptimeKumaException: If the server returns an error.
+        :raises UptimeKumaException: If the session is not logged in, or the server rejects the token.
 
         Example::
 
@@ -3759,16 +3828,18 @@ class UptimeKumaApi(object):
                 'valid': True
             }
         """
-        return self._call('verifyToken', (token, password))
+        self._twofa_request("/api/auth/two-factor/verify-totp", {"code": token})
+        return {"valid": True}
 
     def save_2fa(self, password: str) -> dict:
         """
-        Save the current 2FA configuration.
+        Confirm that 2FA is enabled. On Uptime Kuma 3.x :meth:`verify_token`
+        already enables it, so this only checks the current session.
 
-        :param str password: Current password.
-        :return: The server response.
+        :param str password: Not sent. Kept for compatibility with earlier versions.
+        :return: ``{"msg": "2FA Enabled."}``.
         :rtype: dict
-        :raises UptimeKumaException: If the server returns an error.
+        :raises UptimeKumaException: If 2FA is not enabled yet, the session is not logged in, or the server returns an error.
 
         Example::
 
@@ -3777,16 +3848,18 @@ class UptimeKumaApi(object):
                 'msg': '2FA Enabled.'
             }
         """
-        return self._call('save2FA', password)
+        if not self.twofa_status()["status"]:
+            raise UptimeKumaException("2FA was not verified; call verify_token first")
+        return {"msg": "2FA Enabled."}
 
     def disable_2fa(self, password: str) -> dict:
         """
         Disable 2FA for this user.
 
         :param str password: Current password.
-        :return: The server response.
+        :return: ``{"msg": "2FA Disabled."}``.
         :rtype: dict
-        :raises UptimeKumaException: If the server returns an error.
+        :raises UptimeKumaException: If the session is not logged in or the server returns an error.
 
         Example::
 
@@ -3795,30 +3868,36 @@ class UptimeKumaApi(object):
                 'msg': '2FA Disabled.'
             }
         """
-        return self._call('disable2FA', password)
+        self._twofa_request("/api/auth/two-factor/disable", {"password": password})
+        return {"msg": "2FA Disabled."}
 
     # login
 
-    def login(self, username: str = None, password: str = None, token: str = "") -> dict:
+    def login(self, username: str = None, password: str = None, token: str = None) -> dict:
         """
         Login.
 
-        If username and password is not provided, auto login is performed if disableAuth is enabled.
+        With a username and password, signs in through Uptime Kuma's Better Auth
+        HTTP endpoint, then reopens the socket with the resulting session cookie.
+        If username and password are not provided, the login is a no-op that waits
+        for the server's ``session`` event, which it sends when disableAuth is enabled.
 
         :param str, optional username: Username. Must be None if disableAuth is enabled., defaults to None
         :param str, optional password: Password. Must be None if disableAuth is enabled., defaults to None
-        :param str, optional token: 2FA Token. Required if 2FA is enabled., defaults to ""
-        :return: The server response.
+        :param str, optional token: 2FA Token. Required if 2FA is enabled., defaults to None
+        :return: ``{"token": <session cookie value>}``. The value can be passed to :meth:`~login_by_token`. An empty dict if disableAuth is enabled.
         :rtype: dict
-        :raises UptimeKumaException: If the server returns an error.
+        :raises UptimeKumaException: If the server returns an error, or a 2FA token is required and none was given.
+        :raises Timeout: If the server does not answer, or does not send ``session`` when logging in without credentials.
 
         .. note::
+            Better Auth allows 10 requests per 60 seconds, so repeated logins can be rate limited.
 
-            An "API key" created in the Uptime Kuma web UI is not a credential for
-            this library. The UI "API key" cannot authenticate this socket.io API:
-            it only grants access to Uptime Kuma's Prometheus ``/metrics``
-            endpoint. Authenticate with a username and password, or with a login
-            token via :meth:`~login_by_token`.
+        .. note::
+            An API key created on Uptime Kuma 3.0 can authenticate the socket.io
+            API through an ``Authorization: Bearer <key>`` header (passed as
+            ``headers``) when the server's apiEnabled setting is on. Use
+            :meth:`~add_api_key` to create one.
 
         Example::
 
@@ -3826,52 +3905,94 @@ class UptimeKumaApi(object):
             >>> password = "secret123"
             >>> api.login(username, password)
             {
-                'token': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VybmFtZSI6ImFkbWluIiwiaWF0IjoxNjcxMTk3MjkzfQ.lpho_LuKMnoltXOdA7-jZ98gXOU-UbEIuxMwMRm4Nz0'
+                'token': 'bYq6P1h6e0Lw1l3o8x3V9dWc0n2JtTqk.2f9Q...'
             }
         """
-
-        # autologin
+        # no credentials: disableAuth makes the server send "session" at connect
         if username is None and password is None:
-            with self.wait_for_event(Event.AUTO_LOGIN):
+            with self.wait_for_event(Event.SESSION):
                 return {}
-
-        return self._call('login', {
+        # drop cookies left by an earlier login or a half-finished 2FA attempt
+        self._auth_session.cookies.clear()
+        self._session_cookie = None
+        resp = self._auth_request("POST", "/api/auth/sign-in/username", {
             "username": username,
             "password": password,
-            "token": token
+            "rememberMe": True
         })
-
+        if resp.get("twoFactorRedirect"):
+            if not token:
+                raise UptimeKumaException("a 2FA token is required for this account")
+            # the better-auth.two_factor cookie from sign-in is in the cookie jar
+            self._auth_request("POST", "/api/auth/two-factor/verify-totp", {"code": token})
+        cookie_value = self._auth_session.cookies.get("better-auth.session_token")
+        if not cookie_value:
+            raise UptimeKumaException("the server did not return a session cookie")
+        self._session_cookie = cookie_value
+        self._reconnect_with_cookie(cookie_value)
+        return {"token": cookie_value}
     def login_by_token(self, token: str) -> dict:
         """
         Login by token.
 
+        Reopens the socket with the session cookie and checks that the server
+        authenticated it. The token is the value :meth:`~login` returned, and
+        is also what :meth:`~logout` signs out.
+
         :param str token: Login token generated by :meth:`~login`
-        :return: The server response.
+        :return: ``{"token": <token>}``
         :rtype: dict
-        :raises UptimeKumaException: If the server returns an error.
+        :raises UptimeKumaException: If the server does not authenticate the socket with this token.
+        :raises Timeout: If the server does not answer.
 
         Example::
 
             >>> api.login_by_token(token)
-            {}
+            {
+                'token': 'bYq6P1h6e0Lw1l3o8x3V9dWc0n2JtTqk.2f9Q...'
+            }
         """
-        return self._call('loginByToken', token)
+        if not token or not isinstance(token, str):
+            raise UptimeKumaException("a session token is required")
+        # put the cookie in the jar so logout() can send it, as after login()
+        self._auth_session.cookies.clear()
+        self._auth_session.cookies.set("better-auth.session_token", token, path="/")
+        self._session_cookie = token
+        try:
+            self._reconnect_with_cookie(token)
+        except Timeout:
+            # The server sends "session" on an authenticated socket, before the
+            # post-login info. An unauthenticated socket gets only the
+            # pre-login info and loginRequired, so info never arrives.
+            if self._event_data[Event.SESSION] is None:
+                self._auth_session.cookies.clear()
+                self._session_cookie = None
+                raise UptimeKumaException("the server did not authenticate the session token") from None
+            raise
+        except UptimeKumaException:
+            self._auth_session.cookies.clear()
+            self._session_cookie = None
+            raise
+        return {"token": token}
 
     def logout(self) -> None:
         """
         Logout.
 
-        :return: The server response.
+        Signs the session out over HTTP and forgets the stored token. The socket
+        stays connected.
+
+        :return: None
         :rtype: None
-        :raises UptimeKumaException: If the server returns an error.
+        :raises UptimeKumaException: If the session is not logged in, or the server returns an error.
 
         Example::
 
             >>> api.logout()
-            None
         """
-        return self._call('logout')
-
+        self._auth_request("POST", "/api/auth/sign-out", use_session_cookie=True)
+        self._session_cookie = None
+        self._auth_session.cookies.clear()
     # setup
 
     def need_setup(self) -> bool:
@@ -3895,9 +4016,9 @@ class UptimeKumaApi(object):
 
         :param str username: Username
         :param str password: Password
-        :return: The server response.
+        :return: ``{"msg": "Added Successfully."}``
         :rtype: dict
-        :raises UptimeKumaException: If the server returns an error.
+        :raises UptimeKumaException: If the server is already set up, or returns an error.
 
         Example::
 
@@ -3906,7 +4027,11 @@ class UptimeKumaApi(object):
                 'msg': 'Added Successfully.'
             }
         """
-        return self._call("setup", (username, password))
+        self._auth_request("POST", "/api/setup", {
+            "username": username,
+            "password": password,
+        })
+        return {"msg": "Added Successfully."}
 
     # database
 

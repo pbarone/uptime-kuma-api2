@@ -173,7 +173,6 @@ def initial_event_data():
         Event.INFO: None,
         Event.CERT_INFO: None,
         Event.DOCKER_HOST_LIST: None,
-        Event.AUTO_LOGIN: None,
         Event.MAINTENANCE_LIST: None,
         Event.API_KEY_LIST: None,
     }
