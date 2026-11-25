@@ -51,3 +51,8 @@ UPSTREAM_TRIAGE.md
 # Scratch files: PR/issue bodies drafted for `gh --body-file`, probe scripts,
 # captured output. See "Scratch files go in .temp/" in .kiro/steering/structure.md
 .temp/
+
+# Local agent tooling output: workflow reports (.agents/) and Playwright MCP
+# console logs and snapshots (.playwright-mcp/). Machine-local, never shared.
+.agents/
+.playwright-mcp/
