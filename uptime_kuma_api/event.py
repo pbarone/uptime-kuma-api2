@@ -31,3 +31,6 @@ class Event(str, Enum):
     INIT_SERVER_TIMEZONE = "initServerTimezone"
     MAINTENANCE_LIST = "maintenanceList"
     API_KEY_LIST = "apiKeyList"
+    SESSION = "session"
+    STATS = "stats"
+    HEARTBEAT_LISTS = "heartbeatLists"

@@ -623,22 +623,8 @@ class UptimeKumaApi(object):
             sio_kwargs["logger"] = logger
         self.sio = socketio.Client(**sio_kwargs)
 
-        self._event_data: dict = {
-            Event.MONITOR_LIST: None,
-            Event.NOTIFICATION_LIST: None,
-            Event.PROXY_LIST: None,
-            Event.STATUS_PAGE_LIST: None,
-            Event.HEARTBEAT_LIST: None,
-            Event.IMPORTANT_HEARTBEAT_LIST: None,
-            Event.AVG_PING: None,
-            Event.UPTIME: None,
-            Event.INFO: None,
-            Event.CERT_INFO: None,
-            Event.DOCKER_HOST_LIST: None,
-            Event.AUTO_LOGIN: None,
-            Event.MAINTENANCE_LIST: None,
-            Event.API_KEY_LIST: None
-        }
+        self._dashboard_rendered_sent = False
+        self._reset_event_cache()
 
         self.sio.on(Event.CONNECT, self._event_connect)
         self.sio.on(Event.DISCONNECT, self._event_disconnect)
@@ -660,6 +646,9 @@ class UptimeKumaApi(object):
         self.sio.on(Event.INIT_SERVER_TIMEZONE, self._event_init_server_timezone)
         self.sio.on(Event.MAINTENANCE_LIST, self._event_maintenance_list)
         self.sio.on(Event.API_KEY_LIST, self._event_api_key_list)
+        self.sio.on(Event.SESSION, self._event_session)
+        self.sio.on(Event.STATS, self._event_stats)
+        self.sio.on(Event.HEARTBEAT_LISTS, self._event_heartbeat_lists)
 
         self.connect()
 
@@ -694,6 +683,36 @@ class UptimeKumaApi(object):
                     raise Timeout(f"Timed out while waiting for event {event}")
                 time.sleep(0.01)
 
+    def _reset_event_cache(self) -> None:
+        """Clear every cached event and forget that dashboardRendered was sent."""
+        self._event_data = {
+            Event.MONITOR_LIST: None,
+            Event.NOTIFICATION_LIST: None,
+            Event.PROXY_LIST: None,
+            Event.STATUS_PAGE_LIST: None,
+            Event.HEARTBEAT_LIST: None,
+            Event.IMPORTANT_HEARTBEAT_LIST: None,
+            Event.AVG_PING: None,
+            Event.UPTIME: None,
+            Event.INFO: None,
+            Event.CERT_INFO: None,
+            Event.DOCKER_HOST_LIST: None,
+            Event.AUTO_LOGIN: None,
+            Event.MAINTENANCE_LIST: None,
+            Event.API_KEY_LIST: None,
+            Event.SESSION: None,
+            Event.STATS: None,
+        }
+        self._dashboard_rendered_sent = False
+
+    def _ensure_heartbeat_history(self) -> None:
+        """Ask the server for the deferred heartbeat snapshot, once per connection."""
+        if self._dashboard_rendered_sent:
+            return
+        if self._event_data[Event.MONITOR_LIST] == {}:
+            return  # no monitors; nothing to request, nothing to wait for
+        self._dashboard_rendered_sent = True
+        self.sio.emit("dashboardRendered")
     def _get_event_data(self, event) -> Any:
         monitor_events = [Event.AVG_PING, Event.UPTIME, Event.HEARTBEAT_LIST, Event.IMPORTANT_HEARTBEAT_LIST, Event.CERT_INFO, Event.HEARTBEAT]
         timestamp = time.time()
@@ -854,6 +873,29 @@ class UptimeKumaApi(object):
     def _event_auto_login(self) -> None:
         self._event_data[Event.AUTO_LOGIN] = True
 
+    def _event_session(self, *args) -> None:
+        # sent at connect time when the server runs with disableAuth
+        self._event_data[Event.SESSION] = True
+
+    def _event_stats(self, data) -> None:
+        # {monitorId: {avgPing, avgPing720, avgPing1y, uptime24, uptime720, uptime1y}};
+        # rebind rather than mutate: this runs on the socket.io read thread
+        stats = self._event_data[Event.STATS]
+        stats = {} if stats is None else dict(stats)
+        for monitor_id, values in data.items():
+            stats[int(monitor_id)] = values
+        self._event_data[Event.STATS] = stats
+
+    def _event_heartbeat_lists(self, data) -> None:
+        # {monitorId: [latest heartbeat]}; only fills ids not already cached so
+        # live heartbeat events are not overwritten
+        cache = self._event_data[Event.HEARTBEAT_LIST]
+        cache = {} if cache is None else dict(cache)
+        for monitor_id, rows in data.items():
+            monitor_id = int(monitor_id)
+            if monitor_id not in cache:
+                cache[monitor_id] = rows
+        self._event_data[Event.HEARTBEAT_LIST] = cache
     def _event_init_server_timezone(self) -> None:
         pass
 
