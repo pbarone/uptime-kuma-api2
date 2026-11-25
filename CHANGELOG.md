@@ -24,7 +24,7 @@ The 3.x line drops the code paths for Uptime Kuma 1.x and 2.x servers. Uptime Ku
 - API keys on 3.x: `get_api_keys()` reads the list from the `getAPIKeyList` callback and maps `enabled`, `createdAt` and `expiresAt` to `active`, `createdDate` and `expires`. To authenticate with a key instead of logging in, pass the `Authorization: Bearer <key>` header through `UptimeKumaApi(url, headers=...)`.
 - `uptime()` keeps its `{id: {24, 720, "1y"}}` shape and `avg_ping()` now has it too, both served from the 3.x `stats` event. Stats for a monitor created after login arrive only after the next login or the server's 15-minute refresh.
 - `get_heartbeats()` reads the 3.x `heartbeatLists` event.
-- `tests/live_test_auth_v3.py` checks the auth and data paths against a throwaway 3.0.0-beta.2 container (39 checks), and `scripts/run_disposable_kuma.ps1` gains `-Local` for the local Docker daemon. `hypothesis` is a dev-only dependency for the unit suite, not an install requirement.
+- `tests/live_test_auth_v3.py` checks the auth and data paths against a throwaway 3.0.0-beta.2 container (39 checks). It passes over plain HTTP and over HTTPS behind Nginx Proxy Manager with a real certificate and WebSocket support enabled; on HTTPS the server only adds the `Secure` attribute, and the session cookie keeps its `better-auth.session_token` name. `scripts/run_disposable_kuma.ps1` gains `-Local` for the local Docker daemon. `hypothesis` is a dev-only dependency for the unit suite, not an install requirement.
 
 #### Bugfixes
 

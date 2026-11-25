@@ -19,7 +19,7 @@ Authentication on Uptime Kuma 3.x
 
 **Rate limit.** Better Auth allows 10 requests per 60 seconds. Repeated ``login`` calls, for example in a loop or a retry storm, can exhaust that budget, and the server then rejects further sign-in attempts until the window passes. Log in once and reuse the connection.
 
-**Tokens.** :meth:`~uptime_kuma_api.UptimeKumaApi.login_by_token` is supported on 3.x. Pass the token that ``login`` returned, which is the value of the ``better-auth.session_token`` cookie. Better Auth rotates that cookie when two-factor settings change, and the library keeps the rotated one. ``login`` has no ``api_key`` parameter.
+**Tokens.** :meth:`~uptime_kuma_api.UptimeKumaApi.login_by_token` is supported on 3.x. Pass the token that ``login`` returned, which is the value of the ``better-auth.session_token`` cookie. Better Auth rotates that cookie when two-factor settings change, and the library keeps the rotated one. ``login`` has no ``api_key`` parameter. Over HTTPS the cookie keeps the same name; the server only marks it ``Secure``. Behind a reverse proxy, enable WebSocket support, because the Socket uses a WebSocket.
 
 **API keys.** A key created on Uptime Kuma 3.x authenticates the Socket when you send it as a bearer header on the connection. The server only accepts it when the "API and MCP" setting (``apiEnabled``, Settings -> General) is on::
 

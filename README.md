@@ -35,7 +35,7 @@ Supported Uptime Kuma versions:
 | 3.0.0-beta.2 onward  | 3.x (in development)       |
 | 1.21.3 - 2.5.12      | 2.11.0 onward, 2.x line    |
 
-The floor on this branch is Uptime Kuma 3.0, and it is live-verified against 3.0.0-beta.2. Login uses Uptime Kuma 3.x's HTTP auth (including two-factor login and `login_by_token`), and API keys, `uptime`, `avg_ping`, the compact `get_monitors` and heartbeat history work against the 3.x server. To log in with an API key, pass it as a header, `UptimeKumaApi(url, headers={"Authorization": "Bearer <key>"})`, with the server's "API and MCP" setting turned on. API keys carried over from Uptime Kuma 2.x only work on `/metrics`. The CHANGELOG lists every breaking change from the 2.x API.
+The floor on this branch is Uptime Kuma 3.0, and it is live-verified against 3.0.0-beta.2, over plain HTTP and over HTTPS behind a reverse proxy. Login uses Uptime Kuma 3.x's HTTP auth (including two-factor login and `login_by_token`), and API keys, `uptime`, `avg_ping`, the compact `get_monitors` and heartbeat history work against the 3.x server. To log in with an API key, pass it as a header, `UptimeKumaApi(url, headers={"Authorization": "Bearer <key>"})`, with the server's "API and MCP" setting turned on. API keys carried over from Uptime Kuma 2.x only work on `/metrics`. The CHANGELOG lists every breaking change from the 2.x API.
 
 The 3.x line and the 2.x line can't be installed in the same Python environment. If you manage both Uptime Kuma 2.x and 3.x servers, use one environment per line. The 2.x line (2.11.1 and later) raises a clear error when you log in to an Uptime Kuma 3.x server, and the 3.x line refuses to connect to a server older than Uptime Kuma 3.0.
 
