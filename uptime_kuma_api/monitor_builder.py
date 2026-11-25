@@ -353,7 +353,7 @@ class MonitorBuilder:
         self._data["kafkaProducerSaslOptions"] = value
         return self
 
-    # ── v2 HTTP params ───────────────────────────────────────────────────
+    # ── HTTP params ───────────────────────────────────────────────────
 
     def cacheBust(self, value: bool) -> "MonitorBuilder":
         self._data["cacheBust"] = value
@@ -391,13 +391,13 @@ class MonitorBuilder:
         self._data["responsecheck"] = value
         return self
 
-    # ── v2 Network ───────────────────────────────────────────────────────
+    # ── Network ───────────────────────────────────────────────────────
 
     def ipFamily(self, value: str) -> "MonitorBuilder":
         self._data["ipFamily"] = value
         return self
 
-    # ── v2 PING ──────────────────────────────────────────────────────────
+    # ── PING ──────────────────────────────────────────────────────────
 
     def ping_count(self, value: int) -> "MonitorBuilder":
         self._data["ping_count"] = value
@@ -411,7 +411,7 @@ class MonitorBuilder:
         self._data["ping_per_request_timeout"] = value
         return self
 
-    # ── v2 Misc / low-priority ───────────────────────────────────────────
+    # ── Misc / low-priority ───────────────────────────────────────────
 
     def subtype(self, value: str) -> "MonitorBuilder":
         self._data["subtype"] = value

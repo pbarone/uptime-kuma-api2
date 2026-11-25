@@ -477,7 +477,7 @@ notification_provider_options = {
         ntfyPriority=dict(type="int", required=True),
         ntfyserverurl=dict(type="str", required=True),
         ntfyIcon=dict(type="str", required=False),
-        # Read by the Uptime Kuma 2.x provider; 1.x servers ignore them.
+        # Read by the Uptime Kuma ntfy provider.
         ntfyPriorityDown=dict(type="int", required=False),
         ntfyUseTemplate=dict(type="bool", required=False),
         ntfyCustomTitle=dict(type="str", required=False),
