@@ -39,7 +39,7 @@ body:
     id: kuma_version
     attributes:
       label: Uptime Kuma server version
-      placeholder: e.g. 2.4.0 or 1.23.2
+      placeholder: e.g. 3.0.0-beta.2
     validations:
       required: true
 

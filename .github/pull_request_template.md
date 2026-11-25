@@ -7,9 +7,9 @@
 ## Checklist
 
 - [ ] Title follows Conventional Commits (`fix:` / `feat:` / `docs:` / `test:` / `ci:` / `refactor:` / `chore:`; `!` for breaking)
-- [ ] Tests pass: the v2 unit suite runs clean (see CONTRIBUTING)
+- [ ] Tests pass: the unit suite runs clean (see CONTRIBUTING)
 - [ ] Bug fixes include a regression test **proven to fail against the unfixed code**
-- [ ] Backward compatibility with Uptime Kuma v1.x is preserved (version-gated where needed)
+- [ ] Older Uptime Kuma 3.x releases keep working (version-gated where needed)
 - [ ] Public API changes are additive; new public classes are exported in `__init__.py` **and** added to `docs/api.rst`
 - [ ] `CHANGELOG.md` updated for any user-facing change
 - [ ] No secrets, tokens, or real credentials in the diff

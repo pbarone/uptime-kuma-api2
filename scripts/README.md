@@ -8,11 +8,11 @@ The scripts parse Uptime Kuma's Vue/JS source to detect new monitor fields,
 notification providers, etc. You need a local checkout of the Uptime Kuma source:
 
 ```bash
-# Clone the v2 branch (or a specific tag like v2.4.0)
-git clone --depth 1 --branch 2 https://github.com/louislam/uptime-kuma.git scripts/uptime-kuma
+# Clone a specific tag, for example 3.0.0-beta.2
+git clone --depth 1 --branch 3.0.0-beta.2 https://github.com/louislam/uptime-kuma.git scripts/uptime-kuma
 
-# For comparison against an older version:
-git clone --depth 1 --branch 1.23.16 https://github.com/louislam/uptime-kuma.git scripts/uptime-kuma-old
+# For comparison against another release, clone it beside the first:
+git clone --depth 1 --branch <tag> https://github.com/louislam/uptime-kuma.git scripts/uptime-kuma-old
 ```
 
 These directories are gitignored — they won't be committed.
@@ -24,13 +24,13 @@ Docker host, runs one `tests/live_test_*.py` script against it, and destroys the
 container again:
 
 ```powershell
-pwsh -File scripts/run_disposable_kuma.ps1 -Script tests/live_test_v2_only_fields_v1.py
+pwsh -File scripts/run_disposable_kuma.ps1 -Script tests/live_test_<name>.py
 ```
 
 Use it for the checks that can only be answered by a real server — whether a
-version gate is correct, what the server does with a field the library withholds,
-how a payload round-trips. It is what produced
-`.kiro/specs/v2-only-fields-rule/v1-verification-results.md`.
+version gate is correct, what the server does with a field the library sends,
+how a payload round-trips. The default image is `louislam/uptime-kuma:3.0.0-beta.2`.
+No live script ships on the `v3` branch yet; the 1.x and 2.x ones stay on `main`.
 
 Two things it does that are easy to get wrong by hand:
 

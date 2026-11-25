@@ -144,14 +144,14 @@ What this adds over the original library
 - **New notification providers**: Nextcloud Talk, Brevo, Evolution API
 - **MonitorBuilder**: Fluent builder pattern for monitor configuration
 - **Logger support**: Pass a custom logger for Socket.IO debugging
-- **v2-only parameters**: Automatic version gating ensures backward compatibility with v1.x
-- **Fixes carried forward from the upstream tracker**, plus defects found by this project's own live verification against real 1.x and 2.x servers
+- **Version gating**: a field or monitor type that a later 3.x release introduces can be gated behind a per-field floor, so older 3.x servers keep working (no gate is needed today, because every field ships in Uptime Kuma 3.0)
+- **Fixes carried forward from the upstream tracker**, plus defects found by this project's own live verification against real servers
 
 See [CHANGELOG.md](CHANGELOG.md) for the release-by-release detail — this list is deliberately not versioned, so it does not go stale one release at a time.
 
 Testing
 ---
-The v2 unit tests need no live server, and are what a bare `pytest` runs. This is also exactly what CI runs:
+The unit tests need no live server, and are what a bare `pytest` runs. This is also exactly what CI runs:
 
 ```
 pip install pytest
@@ -173,11 +173,12 @@ Test files:
 | File | Coverage |
 |------|----------|
 | `tests/test_monitor_types_v2.py` | New monitor types (RABBITMQ, SNMP, SMTP, SYSTEM_SERVICE) |
-| `tests/test_monitor_params_v2.py` | v2 monitor parameters, version gating, validation |
-| `tests/test_status_page_v2.py` | Status page analytics replacement, password removal, new fields |
+| `tests/test_monitor_params_v2.py` | Monitor parameters, payload shape, validation, monitor-list cache writes, unparseable server versions |
+| `tests/test_version_gates.py` | Version gating on 3.x: every former 1.x/2.x gate is unconditional, and the gating mechanism (withhold and warn, per-type floors, pre-release handling) against a synthetic 3.1 floor |
+| `tests/test_status_page_v2.py` | Status page analytics keys, ignored password and `googleAnalyticsId`, optional fields, SSL verify, the withhold-and-warn mechanism |
 | `tests/test_notification_v2.py` | Nextcloud Talk, Brevo, Evolution API providers |
 | `tests/test_logger.py` | Logger parameter type validation |
 | `tests/test_monitor_builder.py` | MonitorBuilder fluent API |
 | `tests/test_status_page_incidents.py` | The `incident` -> `incidents` rename in Uptime Kuma 2.1.0: the `KeyError` and the silent data loss from reading only the singular key |
 | `tests/test_delete_id_coercion_v2.py` | String vs integer id in the existence guard of all seven `delete_*` methods (#91) |
-| `tests/test_monitor_cache_v2.py` | The 2.x `updateMonitorIntoList` / `deleteMonitorFromList` delta handlers and the refreshed `delete_monitor` / `delete_monitor_tag` guards |
+| `tests/test_monitor_cache_v2.py` | The `updateMonitorIntoList` / `deleteMonitorFromList` delta handlers and the refreshed `delete_monitor` / `delete_monitor_tag` guards |
