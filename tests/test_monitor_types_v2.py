@@ -15,7 +15,7 @@ class TestNewMonitorTypes(unittest.TestCase):
     def setUp(self):
         # Create a mock instance that has the version property
         self.api = MagicMock(spec=UptimeKumaApi)
-        self.api.version = "2.4.0"
+        self.api.version = "3.0.0"
         # Bind the real version-gate choke point so gates parse self.version
         self.api._parsed_version = UptimeKumaApi._parsed_version.__get__(self.api)
         # Bind _build_monitor_data to our mock so self.version resolves
@@ -198,7 +198,7 @@ class TestNewMonitorTypes(unittest.TestCase):
 
     def test_pm2_basic(self):
         """PM2 with all required fields produces expected dict output."""
-        self.api.version = "2.5.0"
+        self.api.version = "3.0.0"
         result = self.build(
             type=MonitorType.PM2,
             name="test pm2",
@@ -222,22 +222,12 @@ class TestNewMonitorTypes(unittest.TestCase):
         with self.assertRaises(TypeError):
             _check_arguments_monitor(kwargs)
 
-    def test_pm2_version_gate(self):
-        """PM2 is rejected on server versions below 2.5."""
-        self.api.version = "2.4.0"
-        with self.assertRaises(UptimeKumaException):
-            self.build(
-                type=MonitorType.PM2,
-                name="test pm2",
-                system_service_name="my-app",
-            )
-
-    def test_pm2_accepted_on_2_5(self):
-        """PM2 is accepted on server version 2.5.0."""
-        self.api.version = "2.5.0"
+    def test_pm2_accepted(self):
+        """PM2 is accepted."""
+        self.api.version = "3.0.0"
         result = self.build(
             type=MonitorType.PM2,
-            name="pm2 on 2.5",
+            name="pm2",
             system_service_name="worker",
         )
         assert result["type"] == MonitorType.PM2

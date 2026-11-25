@@ -44,73 +44,30 @@ from .docstrings import (
 )
 
 
-# Monitor types Uptime Kuma only implements from a given 2.x version onward, each
-# mapped to the version that introduced it. Every one was added after the 1.23
-# line closed and appears in no 1.x tag, so a pre-2.0 server has no implementation
-# of any of them and does not validate the type on the add path.
-#
-# The floor is per type rather than a shared 2.0, because system-service arrived a
-# minor version later than the other three. A single 2.0 floor let it through on
-# 2.0.x, where the server accepted the monitor and then left it PENDING
-# indefinitely reporting "Unknown Monitor Type" -- the same failure the gate exists
-# to prevent, and the silent kind. The mapping shape mirrors
-# _V2_ONLY_MONITOR_FIELDS deliberately, so the version comparison reads the same
-# way in both places; the two are kept separate because a field and a type are
-# different kinds of thing and a shared namespace could collide meaninglessly.
-#
-# Floors are the upstream release each type first shipped in, established from
-# Uptime Kuma's own source and tags rather than inferred. Provenance and the
-# observed v1 behaviour:
-# .kiro/specs/v2-only-monitor-types-gate/pre-fix-evidence.md
-_V2_ONLY_MONITOR_TYPES = {
-    MonitorType.RABBITMQ: "2.0",
-    MonitorType.SNMP: "2.0",
-    MonitorType.SMTP: "2.0",
-    # louislam/uptime-kuma 2.0.0-beta.4; absent at 1.23.17 and 2.0.0-beta.3.
-    MonitorType.MANUAL: "2.0",
-    # louislam/uptime-kuma#6488, merge 6a700cb, milestone 2.1.0. Absent from
-    # EditMonitor.vue at 2.0.0, 2.0.2 and 2.1.0-beta.0; first present at
-    # 2.1.0-beta.1.
-    MonitorType.SYSTEM_SERVICE: "2.1",
-    # louislam/uptime-kuma 2.1.0-beta.0; absent at 2.0.2.
-    MonitorType.WEBSOCKET_UPGRADE: "2.1",
-    # louislam/uptime-kuma between 2.1.0-beta.3 and 2.1.0 final; absent at
-    # 2.1.0-beta.3.
-    MonitorType.GLOBALPING: "2.1",
-    # louislam/uptime-kuma 2.1.0-beta.2; absent at 2.1.0-beta.1.
-    MonitorType.SIP_OPTIONS: "2.1",
-    # louislam/uptime-kuma#7156, milestone 2.3.0.
-    MonitorType.ORACLEDB: "2.3",
-    # louislam/uptime-kuma#7214, milestone 2.5.0.
-    MonitorType.NTP: "2.5",
-    # louislam/uptime-kuma 2.5.0; absent at 2.4.1.
-    MonitorType.PM2: "2.5",
-    # louislam/uptime-kuma#7034, first in 2.5.4 (release notes); absent from the
-    # 2.5.0 - 2.5.3 monitor-type list.
-    MonitorType.SFTP: "2.5.4",
-}
+# Monitor types the connected server may be too old to implement, each mapped to
+# the release that introduced it. Empty today: every monitor type this library
+# knows ships in Uptime Kuma 3.0, the lowest server it supports. A type added by
+# a later 3.x release gets a row here, for example
+# ``MonitorType.EXAMPLE: "3.1"``, and _check_monitor_type_supported then raises
+# for a server below that release. Raising rather than withholding is the rule
+# for a type, because the type is the thing being requested.
+_MONITOR_TYPE_FLOORS = {}
 
 
-# What happens to a caller-supplied monitor field the connected server is too old
-# to accept. Withholding is the rule; raising is reserved for a field whose loss
-# would change the monitor's verdict rather than how the check runs.
-_WITHHOLD = "withhold"
-_RAISE = "raise"
-
-#: One row of _V2_ONLY_MONITOR_FIELDS.
+#: One row of _MONITOR_FIELD_RULES.
 #:
-#: floor      -- lowest server version implementing the field, as a string, parsed
-#:               with parse_version at comparison time. Kept as a string because
-#:               the warning message quotes it verbatim.
-#: types      -- frozenset of MonitorType members the field applies to, or None for
-#:               no restriction. None rather than an empty frozenset: an empty set
-#:               is a valid value meaning "no type qualifies", so a typo producing
-#:               one would omit the field everywhere, at every version, silently.
-#: behaviour  -- _WITHHOLD or _RAISE.
-_FieldRule = namedtuple("_FieldRule", ("floor", "types", "behaviour"))
+#: floor -- lowest server version implementing the field, as a string, parsed
+#:          with parse_version at comparison time (kept as a string because the
+#:          warning message quotes it verbatim). None means every supported
+#:          server (3.0 and newer) accepts it: the row then only decides which
+#:          monitor types the field is emitted for, and is never withheld.
+#: types -- frozenset of MonitorType members the field applies to, or None for
+#:          no restriction. None rather than an empty frozenset: an empty set
+#:          is a valid value meaning "no type qualifies", so a typo producing
+#:          one would omit the field everywhere, at every version, silently.
+_FieldRule = namedtuple("_FieldRule", ("floor", "types"))
 
-# The monitor types that accept ipFamily. Spans both majors, so ipFamily stays
-# reachable on a pre-2.0 server even though four of these types do not.
+# The monitor types that accept ipFamily.
 _IP_FAMILY_TYPES = frozenset({
     MonitorType.HTTP, MonitorType.KEYWORD, MonitorType.JSON_QUERY,
     MonitorType.PING, MonitorType.PORT, MonitorType.DNS,
@@ -120,100 +77,79 @@ _IP_FAMILY_TYPES = frozenset({
     MonitorType.NTP,
 })
 
-# The monitor types that accept the v2-only HTTP fields.
-_HTTP_V2_TYPES = frozenset({
+# The monitor types that accept the HTTP-only fields below.
+_HTTP_FIELD_TYPES = frozenset({
     MonitorType.HTTP, MonitorType.KEYWORD,
     MonitorType.JSON_QUERY, MonitorType.REAL_BROWSER,
 })
 
-# Monitor fields Uptime Kuma only accepts from the stated version onward, and the
-# single source of truth for which those are. A caller-supplied value below the
-# floor is withheld from the payload and reported once per call as an
-# UnsupportedFieldWarning; `conditions` alone raises, because it changes the
-# monitor's up/down verdict rather than how the check runs. The rule, including
-# that test, is stated for callers in docs/api.rst under
-# "Version-gated monitor fields".
-#
-# Every field was verified against a real 1.23.2 server rather than assumed: all
-# 25 reachable fields are rejected with "table monitor has no column named ...",
-# so none of them is accepted by 1.x. Evidence:
-# .kiro/specs/v2-only-fields-rule/v1-verification-results.md
-#
-# That probe shows a field is absent from 1.x; it does not show which 2.x release
-# added it. Each floor is the release whose db/knex_migrations first creates the
-# column, so fields added after 2.0.0 carry a 2.1 or 2.4 floor (issue #71). The
-# tag and migration for each are listed in tests/test_monitor_params_v2.py
-# (LATE_MONITOR_FIELD_FLOORS).
+# Monitor fields and the monitor types each applies to, and the single source of
+# truth for which fields are version-gated. A row with a floor is withheld from
+# the payload when the server is older than the floor, and reported once per call
+# as an UnsupportedFieldWarning; a row whose floor is None (every row today, since
+# every field ships in Uptime Kuma 3.0) is emitted for its types on every server.
+# The rule is stated for callers in docs/api.rst under "Version-gated monitor
+# fields". Add a field that a later 3.x release introduces with that release as
+# its floor, for example ``_FieldRule("3.1", None)``.
 #
 # Declaration order is the order withheld fields appear in the warning message.
 # Keep it stable: the message text is part of the warnings module's duplicate-
 # suppression key, so reordering changes which warnings are shown.
-_V2_ONLY_MONITOR_FIELDS = {
-    "conditions": _FieldRule("2.0", None, _RAISE),
+_MONITOR_FIELD_RULES = {
+    "ipFamily": _FieldRule(None, _IP_FAMILY_TYPES),
 
-    "ipFamily": _FieldRule("2.0", _IP_FAMILY_TYPES, _WITHHOLD),
+    "cacheBust": _FieldRule(None, _HTTP_FIELD_TYPES),
+    "retryOnlyOnStatusCodeFailure": _FieldRule(None, _HTTP_FIELD_TYPES),
+    "bearer_token": _FieldRule(None, _HTTP_FIELD_TYPES),
+    "oauth_audience": _FieldRule(None, _HTTP_FIELD_TYPES),
+    "domainExpiryNotification": _FieldRule(None, _HTTP_FIELD_TYPES),
+    "saveResponse": _FieldRule(None, _HTTP_FIELD_TYPES),
+    "saveErrorResponse": _FieldRule(None, _HTTP_FIELD_TYPES),
+    "responseMaxLength": _FieldRule(None, _HTTP_FIELD_TYPES),
+    "responsecheck": _FieldRule(None, _HTTP_FIELD_TYPES),
 
-    "cacheBust": _FieldRule("2.0", _HTTP_V2_TYPES, _WITHHOLD),
-    "retryOnlyOnStatusCodeFailure": _FieldRule("2.1", _HTTP_V2_TYPES, _WITHHOLD),
-    "bearer_token": _FieldRule("2.4", _HTTP_V2_TYPES, _WITHHOLD),
-    "oauth_audience": _FieldRule("2.0", _HTTP_V2_TYPES, _WITHHOLD),
-    "domainExpiryNotification": _FieldRule("2.1", _HTTP_V2_TYPES, _WITHHOLD),
-    "saveResponse": _FieldRule("2.1", _HTTP_V2_TYPES, _WITHHOLD),
-    "saveErrorResponse": _FieldRule("2.1", _HTTP_V2_TYPES, _WITHHOLD),
-    "responseMaxLength": _FieldRule("2.1", _HTTP_V2_TYPES, _WITHHOLD),
-    "responsecheck": _FieldRule("2.0", _HTTP_V2_TYPES, _WITHHOLD),
+    "subtype": _FieldRule(None, None),
+    "wsSubprotocol": _FieldRule(None, None),
+    "wsIgnoreSecWebsocketAcceptHeader": _FieldRule(None, None),
+    "remoteBrowsersToggle": _FieldRule(None, None),
+    "remote_browser": _FieldRule(None, None),
+    "screenshot_delay": _FieldRule(None, None),
+    "gamedigToken": _FieldRule(None, None),
+    "protocol": _FieldRule(None, None),
 
-    "subtype": _FieldRule("2.1", None, _WITHHOLD),
-    "wsSubprotocol": _FieldRule("2.1", None, _WITHHOLD),
-    "wsIgnoreSecWebsocketAcceptHeader": _FieldRule("2.1", None, _WITHHOLD),
-    "remoteBrowsersToggle": _FieldRule("2.0", None, _WITHHOLD),
-    "remote_browser": _FieldRule("2.0", None, _WITHHOLD),
-    "screenshot_delay": _FieldRule("2.1", None, _WITHHOLD),
-    "gamedigToken": _FieldRule("2.4", None, _WITHHOLD),
-    "protocol": _FieldRule("2.1", None, _WITHHOLD),
+    "jsonPathOperator": _FieldRule(None, frozenset({MonitorType.JSON_QUERY})),
+    "snmp_v3_username": _FieldRule(None, frozenset({MonitorType.SNMP})),
+    "ping_count": _FieldRule(None, frozenset({MonitorType.PING})),
+    "ping_numeric": _FieldRule(None, frozenset({MonitorType.PING})),
+    "ping_per_request_timeout": _FieldRule(None, frozenset({MonitorType.PING})),
+    "mqttWebsocketPath": _FieldRule(None, frozenset({MonitorType.MQTT})),
+    "mqttCheckType": _FieldRule(None, frozenset({MonitorType.MQTT})),
 
-    "jsonPathOperator": _FieldRule("2.0", frozenset({MonitorType.JSON_QUERY}), _WITHHOLD),
-    "snmp_v3_username": _FieldRule("2.1", frozenset({MonitorType.SNMP}), _WITHHOLD),
-    "ping_count": _FieldRule("2.0", frozenset({MonitorType.PING}), _WITHHOLD),
-    "ping_numeric": _FieldRule("2.0", frozenset({MonitorType.PING}), _WITHHOLD),
-    "ping_per_request_timeout": _FieldRule("2.0", frozenset({MonitorType.PING}), _WITHHOLD),
-    "mqttWebsocketPath": _FieldRule("2.0", frozenset({MonitorType.MQTT}), _WITHHOLD),
-    "mqttCheckType": _FieldRule("2.0", frozenset({MonitorType.MQTT}), _WITHHOLD),
+    "ntpStratumThreshold": _FieldRule(None, frozenset({MonitorType.NTP})),
+    "ntpTimeOffsetThreshold": _FieldRule(None, frozenset({MonitorType.NTP})),
+    "ntpRootDispersionThreshold": _FieldRule(None, frozenset({MonitorType.NTP})),
 
-    "ntpStratumThreshold": _FieldRule("2.5", frozenset({MonitorType.NTP}), _WITHHOLD),
-    "ntpTimeOffsetThreshold": _FieldRule("2.5", frozenset({MonitorType.NTP}), _WITHHOLD),
-    "ntpRootDispersionThreshold": _FieldRule("2.5", frozenset({MonitorType.NTP}), _WITHHOLD),
-
-    "sshUsername": _FieldRule("2.5.4", frozenset({MonitorType.SFTP}), _WITHHOLD),
-    "sshAuthMethod": _FieldRule("2.5.4", frozenset({MonitorType.SFTP}), _WITHHOLD),
-    "sshPassword": _FieldRule("2.5.4", frozenset({MonitorType.SFTP}), _WITHHOLD),
-    "sshPrivateKey": _FieldRule("2.5.4", frozenset({MonitorType.SFTP}), _WITHHOLD),
-    "sshPassphrase": _FieldRule("2.5.4", frozenset({MonitorType.SFTP}), _WITHHOLD),
-    "sftpPath": _FieldRule("2.5.4", frozenset({MonitorType.SFTP}), _WITHHOLD),
+    "sshUsername": _FieldRule(None, frozenset({MonitorType.SFTP})),
+    "sshAuthMethod": _FieldRule(None, frozenset({MonitorType.SFTP})),
+    "sshPassword": _FieldRule(None, frozenset({MonitorType.SFTP})),
+    "sshPrivateKey": _FieldRule(None, frozenset({MonitorType.SFTP})),
+    "sshPassphrase": _FieldRule(None, frozenset({MonitorType.SFTP})),
+    "sftpPath": _FieldRule(None, frozenset({MonitorType.SFTP})),
 }
 
 
-# Status-page fields Uptime Kuma only accepts from the stated version onward.
-# Follows the same rule as _V2_ONLY_MONITOR_FIELDS: a caller-supplied value below
-# the floor is withheld from the payload and reported once per call as an
-# UnsupportedFieldWarning. The analytics trio is NOT here -- the v2 server
-# requires analyticsType present and rejects its absence (see issue #33).
-#
-# Floors are the upstream release each field first shipped in, established from
-# Uptime Kuma's own source and tags. Provenance:
-# .kiro/specs/v2-only-non-monitor-surfaces/upstream-inventory.md
-# .kiro/specs/v2-only-non-monitor-surfaces/v1-verification-results.md
-_V2_ONLY_STATUS_PAGE_FIELDS = {
-    # present at 2.1.0, absent at 2.0.2 -- server/socket-handlers/
-    # status-page-socket-handler.js, server/model/status_page.js
-    "showOnlyLastHeartbeat": "2.1",
-    "rssTitle": "2.1",
-}
+# Status-page fields the connected server may be too old to accept, each mapped to
+# the release that introduced it. Empty today: every status-page field this
+# library sends ships in Uptime Kuma 3.0. Follows the same rule as
+# _MONITOR_FIELD_RULES: a caller-supplied value below the floor is withheld from
+# the payload and reported once per call as an UnsupportedFieldWarning. The
+# analytics trio does not belong here even for a later field: the server requires
+# analyticsType present and rejects its absence (see issue #33).
+_STATUS_PAGE_FIELD_FLOORS = {}
 
-# How many important heartbeats get_important_heartbeats() asks a 2.x server for
-# per monitor. 500 is the LIMIT of sendImportantHeartbeatList in server/client.js
-# at 1.23.16 (the login-time push that 2.x removed), so the history depth callers
-# saw on 1.x is preserved.
+# How many important heartbeats get_important_heartbeats() asks the server for
+# per monitor. 500 is the LIMIT the login-time push used before the paged call
+# replaced it, so the history depth callers saw stays the same.
 _IMPORTANT_HEARTBEAT_COUNT = 500
 
 
@@ -795,8 +731,7 @@ class UptimeKumaApi(object):
         # acks on the same read-loop thread. So _event_monitor_list has already
         # run by the time sio.call returns.
         #
-        # Deliberately not version gated: getMonitorList exists in 1.23.X and
-        # 2.x, and reading self.version would route through info() ->
+        # Deliberately not version gated: reading self.version would route through info() ->
         # _get_event_data, whose 0.2s wait_events sleep costs far more than the
         # 2-6ms round trip it would be guarding.
         self._call('getMonitorList')
@@ -813,10 +748,10 @@ class UptimeKumaApi(object):
         self._event_data[Event.MONITOR_LIST] = data
 
     def _event_update_monitor_into_list(self, data) -> None:
-        # Uptime Kuma 2.x sends this instead of a full monitorList after add,
+        # The server sends this instead of a full monitorList after add,
         # edit, pause, resume and the monitor tag operations. The payload is
         # {id: monitor}, string-keyed like monitorList, with one or more
-        # entries. v1.x never emits this event, so this handler is inert there.
+        # entries.
         monitors = self._event_data[Event.MONITOR_LIST]
         # rebind rather than mutate: this runs on the socket.io read thread,
         # while _get_event_data copies the same dict on the caller's thread
@@ -826,10 +761,9 @@ class UptimeKumaApi(object):
         self._event_data[Event.MONITOR_LIST] = updated
 
     def _event_delete_monitor_from_list(self, monitor_id) -> None:
-        # Uptime Kuma 2.x sends this instead of a full monitorList after a
+        # The server sends this instead of a full monitorList after a
         # delete, carrying the id alone. One event per monitor, so a group
         # delete that cascades to children arrives as several of these.
-        # v1.x never emits this event, so this handler is inert there.
         monitors = self._event_data[Event.MONITOR_LIST]
         if monitors is None:
             # No monitorList has arrived yet, so there is nothing to remove.
@@ -1009,22 +943,22 @@ class UptimeKumaApi(object):
         Only the *release segment* of the reported version is compared, so a
         pre-release is gated as the release it belongs to. Uptime Kuma ships
         betas and reports the tag verbatim, and under PEP 440 a pre-release
-        sorts below its own release, so ``2.0.0-beta.4`` would otherwise be
-        treated as 1.x by every gate in this library. ``2.0.0b1``, ``2.0.0rc1``,
-        ``2.0.0.dev1`` and ``2.0.0`` therefore all evaluate alike against a
-        ``2.0`` floor.
+        sorts below its own release, so ``3.0.0-beta.2`` would otherwise be
+        treated as older than 3.0 by every gate in this library. ``3.0.0b1``,
+        ``3.0.0rc1``, ``3.0.0.dev1`` and ``3.0.0`` therefore all evaluate alike
+        against a ``3.0`` floor.
 
         This is a deliberate posture rather than a neutral correction, and it
-        errs on the side of assuming a feature is present: ``2.0.0.dev1`` is a
-        build from *before* 2.0 was finished and may genuinely lack a 2.0 field,
-        yet it is gated as 2.0. That matches the optimism already applied to an
+        errs on the side of assuming a feature is present: ``3.0.0.dev1`` is a
+        build from *before* 3.0 was finished and may genuinely lack a 3.0 field,
+        yet it is gated as 3.0. That matches the optimism already applied to an
         unparseable version below, and it fails in the same direction. The
         alternative — flooring each gate at the specific pre-release that first
         carried the feature — is more precise and requires knowing which beta
         introduced every gated field, per gate.
 
         A version that cannot be parsed at all (for example a nightly build like
-        ``2.0.0-dev-nightly-20240101``, or a missing version reported as ``None``
+        ``3.0.0-dev-nightly-20240101``, or a missing version reported as ``None``
         or an empty string) is treated as the newest possible version instead of
         raising, so version-gated code paths keep working against such servers.
         Note the asymmetry this leaves in place: an unparseable string is treated
@@ -1040,84 +974,55 @@ class UptimeKumaApi(object):
         try:
             # base_version drops the pre/dev/post/local parts, keeping epoch and
             # release. Compared as a Version rather than a raw release tuple,
-            # because tuples do not zero-pad: (2, 0) >= (2, 0, 0) is False, so a
-            # server reporting "2.0" would fail a "2.0.0" floor.
+            # because tuples do not zero-pad: (3, 0) >= (3, 0, 0) is False, so a
+            # server reporting "3.0" would fail a "3.0.0" floor.
             return parse_version(parse_version(self.version).base_version)
         except (InvalidVersion, TypeError):
             # TypeError covers a None version, which InvalidVersion does not.
             return parse_version("9999")  # treat unparseable as newest
-
-    def _check_conditions_supported(self, conditions) -> None:
-        """
-        Rejects the v2-only ``conditions`` monitor field on a pre-2.0 server.
-
-        Raises rather than silently dropping, because ``conditions`` defines the
-        monitor's up/down semantics: a silently discarded value produces a
-        monitor that reports success against criteria the caller never set. The
-        other v2-only monitor fields are omitted silently instead, because they
-        change *how* the check runs rather than its verdict, so their loss is
-        observable to the caller.
-
-        :param list conditions: The caller-supplied conditions value, or None.
-        :raises UptimeKumaException: If conditions are requested on a server
-                                     older than 2.0.
-        """
-        if conditions and self._parsed_version() < parse_version("2.0"):
-            raise UptimeKumaException(
-                "conditions requires Uptime Kuma 2.0 or newer, "
-                f"but the server reports version {self.version}"
-            )
 
     def _check_monitor_type_supported(self, type_) -> None:
         """
         Rejects a monitor type the connected server is too old to implement.
 
         Each type is compared against its own floor from
-        :data:`_V2_ONLY_MONITOR_TYPES`, not against a shared ``2.0``. Three of the
-        four arrived in 2.0.0, but ``system-service`` arrived in 2.1.0, and a
-        shared floor let it through on 2.0.x.
+        :data:`_MONITOR_TYPE_FLOORS`. The table is empty while every type ships in
+        Uptime Kuma 3.0, so nothing raises today.
 
         Raises rather than proceeding, because a monitor type is not a parameter
         whose loss can be degraded -- it is the thing being requested. A server
-        without an implementation of the type does not validate the type when a
-        monitor is added, so an ungated request either fails with an opaque
-        ``SQLITE_ERROR`` naming a database column the caller never typed, or --
-        once the type's version-gated companion fields are withheld -- succeeds
-        into a monitor that stays ``PENDING`` forever reporting
-        ``Unknown Monitor Type``.
+        without an implementation of the type may accept the monitor and leave it
+        ``PENDING`` forever reporting ``Unknown Monitor Type``.
 
         :param type_: The caller-supplied monitor type, or None.
         :raises UptimeKumaException: If the requested monitor type requires a
                                      newer server than the one connected.
         """
-        floor = _V2_ONLY_MONITOR_TYPES.get(type_)
+        floor = _MONITOR_TYPE_FLOORS.get(type_)
         if floor is not None and self._parsed_version() < parse_version(floor):
             # MonitorType(type_).value rather than interpolating type_ directly:
-            # str-Enum __format__ differs across Python 3.8-3.13, and the message
+            # str-Enum __format__ differs across Python versions, and the message
             # must read 'snmp' on every supported interpreter.
             #
-            # The floor comes from the mapping rather than being hardcoded: telling
-            # a caller on 2.0.2 that they need "2.0 or newer" is a contradiction,
-            # since they already are.
+            # The floor comes from the mapping rather than being hardcoded.
             raise UptimeKumaException(
                 f"monitor type '{MonitorType(type_).value}' requires Uptime Kuma "
                 f"{floor} or newer, but the server reports version {self.version}"
             )
 
-    def _withheld_v2_fields(self, supplied, type_=None) -> list:
+    def _withheld_monitor_fields(self, supplied, type_=None) -> list:
         """
         Names the version-gated monitor fields this call cannot send.
 
-        Iterates :data:`_V2_ONLY_MONITOR_FIELDS` in declaration order, so the
+        Iterates :data:`_MONITOR_FIELD_RULES` in declaration order, so the
         returned order -- and therefore the warning message, and the duplicate-
         suppression key the warnings module derives from it -- is stable. Neither
         ``supplied`` order nor set iteration order is used: the first varies by
         caller and the second by interpreter run, and either would make the same
         call produce two different messages.
 
-        ``_RAISE`` entries are skipped, so a field whose rule is to raise never
-        appears in a warning. By the time this runs, such a field has either
-        already raised in the validation preamble or was never a request.
+        Rows whose floor is None are skipped: every supported server accepts
+        them, so they are never withheld.
 
         :param dict supplied: Caller-supplied values keyed by parameter name. A key
                               mapped to None counts as not supplied.
@@ -1125,18 +1030,16 @@ class UptimeKumaApi(object):
                       None -- the ``edit_monitor`` path, which names no type --
                       the *type restriction* is not applied but the version
                       comparison still is. Skipping the whole entry instead would
-                      leave every type-restricted field ungated on that path, so
-                      ``edit_monitor(id_, bearer_token=...)`` would still send a
-                      column a 1.x server has no room for. Not applying the
-                      restriction costs nothing on 2.x, where such a field is at
-                      or above its floor and is never withheld anyway.
+                      leave every type-restricted field ungated on that path.
+                      Not applying the restriction costs nothing for a field at
+                      or above its floor, which is never withheld.
         :return: The withheld field names, in registry declaration order.
         :rtype: list
         """
         parsed = self._parsed_version()
         withheld = []
-        for name, rule in _V2_ONLY_MONITOR_FIELDS.items():
-            if rule.behaviour == _RAISE:
+        for name, rule in _MONITOR_FIELD_RULES.items():
+            if rule.floor is None:
                 continue
             if supplied.get(name) is None:
                 continue
@@ -1147,14 +1050,14 @@ class UptimeKumaApi(object):
                 withheld.append(name)
         return withheld
 
-    def _warn_withheld_v2_fields(self, withheld, stacklevel) -> None:
+    def _warn_withheld_monitor_fields(self, withheld, stacklevel) -> None:
         """
         Reports withheld fields once, as a single :class:`UnsupportedFieldWarning`.
 
         One warning per call rather than one per field, so a call withholding six
         fields is one notification and not six.
 
-        :param list withheld: Field names from :meth:`_withheld_v2_fields`.
+        :param list withheld: Field names from :meth:`_withheld_monitor_fields`.
         :param int stacklevel: How many frames to skip so the warning blames the
                                caller's line rather than this library's. 4 from
                                ``_build_monitor_data`` (here, the builder,
@@ -1167,7 +1070,7 @@ class UptimeKumaApi(object):
             return
         version = self.version
         detail = ", ".join(
-            f"{name} (requires {_V2_ONLY_MONITOR_FIELDS[name].floor} or newer)"
+            f"{name} (requires {_MONITOR_FIELD_RULES[name].floor} or newer)"
             for name in withheld
         )
         plural = "s" if len(withheld) > 1 else ""
@@ -1183,7 +1086,7 @@ class UptimeKumaApi(object):
         """
         Names the version-gated status-page fields this call cannot send.
 
-        Iterates :data:`_V2_ONLY_STATUS_PAGE_FIELDS` in declaration order, so
+        Iterates :data:`_STATUS_PAGE_FIELD_FLOORS` in declaration order, so
         the returned order -- and therefore the warning message, and the
         duplicate-suppression key the warnings module derives from it -- is
         stable.
@@ -1196,7 +1099,7 @@ class UptimeKumaApi(object):
         """
         parsed = self._parsed_version()
         withheld = []
-        for name, floor in _V2_ONLY_STATUS_PAGE_FIELDS.items():
+        for name, floor in _STATUS_PAGE_FIELD_FLOORS.items():
             if supplied.get(name) is None:
                 continue
             if parsed < parse_version(floor):
@@ -1208,7 +1111,7 @@ class UptimeKumaApi(object):
         Reports withheld status-page fields once, as a single
         :class:`UnsupportedFieldWarning`.
 
-        Same contract as :meth:`_warn_withheld_v2_fields` but with status-page-
+        Same contract as :meth:`_warn_withheld_monitor_fields` but with status-page-
         specific wording.
 
         :param list withheld: Field names from
@@ -1224,7 +1127,7 @@ class UptimeKumaApi(object):
             return
         version = self.version
         detail = ", ".join(
-            f"{name} (requires {_V2_ONLY_STATUS_PAGE_FIELDS[name]} or newer)"
+            f"{name} (requires {_STATUS_PAGE_FIELD_FLOORS[name]} or newer)"
             for name in withheld
         )
         plural = "s" if len(withheld) > 1 else ""
@@ -1419,9 +1322,6 @@ class UptimeKumaApi(object):
         if conditions is not None and not isinstance(conditions, list):
             raise TypeError("conditions must be a list or None")
 
-        self._check_conditions_supported(conditions)
-        # After the conditions guard on purpose: a call that trips both keeps
-        # raising the message it raised before the type gate existed.
         self._check_monitor_type_supported(type)
 
         if responseMaxLength is not None and (responseMaxLength < 1 or responseMaxLength > 10_000_000):
@@ -1446,19 +1346,17 @@ class UptimeKumaApi(object):
             "httpBodyEncoding": httpBodyEncoding,
         }
 
-        if self._parsed_version() >= parse_version("1.22"):
-            data.update({
-                "parent": parent,
-            })
+        data.update({
+            "parent": parent,
+        })
 
         if type in [MonitorType.KEYWORD, MonitorType.GRPC_KEYWORD]:
             data.update({
                 "keyword": keyword,
             })
-            if self._parsed_version() >= parse_version("1.23"):
-                data.update({
-                    "invertKeyword": invertKeyword,
-                })
+            data.update({
+                "invertKeyword": invertKeyword,
+            })
 
         # HTTP, KEYWORD, JSON_QUERY, REAL_BROWSER
         data.update({
@@ -1481,10 +1379,9 @@ class UptimeKumaApi(object):
             "authMethod": authMethod,
         })
 
-        if self._parsed_version() >= parse_version("1.23"):
-            data.update({
-                "timeout": timeout,
-            })
+        data.update({
+            "timeout": timeout,
+        })
 
         if authMethod in [AuthMethod.HTTP_BASIC, AuthMethod.NTLM]:
             data.update({
@@ -1607,10 +1504,9 @@ class UptimeKumaApi(object):
             data.update({
                 "game": game,
             })
-            if self._parsed_version() >= parse_version("1.23"):
-                data.update({
-                    "gamedigGivenPortOnly": gamedigGivenPortOnly,
-                })
+            data.update({
+                "gamedigGivenPortOnly": gamedigGivenPortOnly,
+            })
 
         # JSON_QUERY
         if type == MonitorType.JSON_QUERY:
@@ -1668,29 +1564,26 @@ class UptimeKumaApi(object):
 
         # conditions keeps its own emission line rather than going through the
         # pass below: the caller's list must reach the payload as the same object,
-        # and None must become []. No other field has a value rule, so encoding
-        # this one as a per-entry coercion would add a third dimension to
-        # _FieldRule used exactly once.
-        if self._parsed_version() >= parse_version(
-                _V2_ONLY_MONITOR_FIELDS["conditions"].floor):
-            data["conditions"] = conditions if conditions is not None else []
+        # and None must become []. No other field has a value rule.
+        data["conditions"] = conditions if conditions is not None else []
 
-        # Every other version-gated monitor field, emitted from the registry in
-        # one pass. A field the server is too old for is withheld and reported
+        # Every other monitor field in the registry, emitted in one pass. A field
+        # the server is too old for (a row with a floor) is withheld and reported
         # once, together, by the single warning at the end.
         #
-        # locals() is read once here rather than spelling out 25 "name": name
-        # pairs. That is deliberate: a mistyped pair would yield None, the pass
-        # reads None as "not supplied", and the field would be neither emitted nor
-        # reported -- a silent hole. test_every_registry_key_is_a_build_monitor_data_parameter
-        # is what makes a wrong key fail instead.
+        # locals() is read once here rather than spelling out one "name": name
+        # pair per field. That is deliberate: a mistyped pair would yield None, the
+        # pass reads None as "not supplied", and the field would be neither
+        # emitted nor reported -- a silent hole.
+        # test_every_registry_key_is_a_build_monitor_data_parameter is what makes
+        # a wrong key fail instead.
         local_values = locals()
         supplied = {name: local_values.get(name)
-                    for name in _V2_ONLY_MONITOR_FIELDS}
+                    for name in _MONITOR_FIELD_RULES}
 
-        withheld = self._withheld_v2_fields(supplied, type)
-        for name, rule in _V2_ONLY_MONITOR_FIELDS.items():
-            if rule.behaviour == _RAISE or name in withheld:
+        withheld = self._withheld_monitor_fields(supplied, type)
+        for name, rule in _MONITOR_FIELD_RULES.items():
+            if name in withheld:
                 continue
             value = supplied[name]
             if value is None:
@@ -1701,7 +1594,7 @@ class UptimeKumaApi(object):
 
         # stacklevel 4: this method, add_monitor, the caller. The helper adds one
         # more frame of its own.
-        self._warn_withheld_v2_fields(withheld, stacklevel=4)
+        self._warn_withheld_monitor_fields(withheld, stacklevel=4)
 
         return data
 
@@ -1775,21 +1668,17 @@ class UptimeKumaApi(object):
             icon: str = "/icon.svg",
             publicGroupList: list = None,
 
-            # v2 analytics
+            # analytics
             analyticsType: str = None,
             analyticsId: str = None,
             analyticsScriptUrl: str = None,
-            # v2 password removal
+            # accepted and ignored: the server no longer reads a status page password
             password: str = None,
-            # v2 new fields
             showOnlyLastHeartbeat: bool = None,
             rssTitle: str = None,
     ) -> tuple[str, dict, str, list]:
         if not theme:
-            if self._parsed_version() >= parse_version("1.22"):
-                theme = "auto"
-            else:
-                theme = "light"
+            theme = "auto"
         if theme not in ["auto", "light", "dark"]:
             raise ValueError
         if not domainNameList:
@@ -1810,52 +1699,23 @@ class UptimeKumaApi(object):
             "footerText": footerText,
             "showPoweredBy": showPoweredBy,
         }
-        if self._parsed_version() >= parse_version("1.23"):
-            config.update({
-                "showCertificateExpiry": showCertificateExpiry,
-            })
+        config.update({
+            "showCertificateExpiry": showCertificateExpiry,
+        })
 
-        # The analytics boundary is 2.1, not 2.0. The three analytics keys and
-        # the two fields below them all first ship in 2.1.0; a 2.0.x server still
-        # reads googleAnalyticsId. Gating them at 2.0 sent four keys 2.0.x has no
-        # columns for and dropped the one it does read, so a caller's
-        # googleAnalyticsId was silently lost on any save against 2.0.0-2.0.2.
-        # Provenance is upstream source at tags, not inference:
-        # server/socket-handlers/status-page-socket-handler.js and
-        # server/model/status_page.js carry google_analytics_tag_id at 2.0.0 and
-        # 2.0.2 with no analytics_* columns; at 2.1.0 the analytics_* columns
-        # exist and google_analytics_tag_id is gone. See issue #41.
-        if self._parsed_version() >= parse_version("2.1"):
-            # 2.1+: use the new analytics fields, omit googleAnalyticsId.
-            #
-            # These are sent unconditionally, including when None. The server
-            # validates analyticsType and rejects the whole save with "Invalid
-            # analytics type" if the key is absent. Verified against 2.4.0:
-            # null is accepted, as are "google"/"plausible"/"umami", while an
-            # absent key, "" and "none" are all rejected. Omitting the key when
-            # no analytics are configured therefore broke save_status_page for
-            # every status page without analytics.
-            config["analyticsType"] = analyticsType
-            config["analyticsId"] = analyticsId
-            config["analyticsScriptUrl"] = analyticsScriptUrl
-            # 2.1+: showOnlyLastHeartbeat and rssTitle. Their floor is 2.1 in
-            # _V2_ONLY_STATUS_PAGE_FIELDS, so the guard here agrees with the
-            # registry rather than being one minor version looser than it.
-            if showOnlyLastHeartbeat is not None:
-                config["showOnlyLastHeartbeat"] = showOnlyLastHeartbeat
-            if rssTitle is not None:
-                config["rssTitle"] = rssTitle
-        else:
-            # Below 2.1, including every 2.0.x: the server reads
-            # googleAnalyticsId and has no analytics_* columns.
-            config["googleAnalyticsId"] = googleAnalyticsId
-
-        # password is separate, and its boundary really is 2.0: the v2 server
-        # ignores it. Left exactly as it was -- the analytics boundary being
-        # wrong says nothing about this one.
-        if self._parsed_version() < parse_version("2.0"):
-            if password is not None:
-                config["password"] = password
+        # The analytics keys are sent unconditionally, including when None. The
+        # server validates analyticsType and rejects the whole save with "Invalid
+        # analytics type" if the key is absent; null, "google", "plausible" and
+        # "umami" are accepted, while an absent key, "" and "none" are rejected.
+        # googleAnalyticsId and password are accepted by this method and ignored,
+        # so a caller that still passes them does not break.
+        config["analyticsType"] = analyticsType
+        config["analyticsId"] = analyticsId
+        config["analyticsScriptUrl"] = analyticsScriptUrl
+        if showOnlyLastHeartbeat is not None:
+            config["showOnlyLastHeartbeat"] = showOnlyLastHeartbeat
+        if rssTitle is not None:
+            config["rssTitle"] = rssTitle
 
         return slug, config, icon, publicGroupList
 
@@ -2230,8 +2090,8 @@ class UptimeKumaApi(object):
         Some monitor fields only exist from a certain Uptime Kuma version onward.
         If you supply one the connected server does not implement, it is left out
         of the payload and reported once with an :class:`UnsupportedFieldWarning`.
-        See :ref:`v2-only-fields` for the rule, including the one field that
-        raises instead and how to make the warning raise if you prefer.
+        See :ref:`v2-only-fields` for the rule, including how to make the
+        warning raise if you prefer.
 
         :return: The server response.
         :rtype: dict
@@ -2282,30 +2142,29 @@ class UptimeKumaApi(object):
                 'msg': 'Saved.'
             }
         """
-        self._check_conditions_supported(kwargs.get("conditions"))
         # kwargs, not the merged data below: the guard fires on what the caller
         # explicitly asked for, so editing an unrelated field on a monitor that
-        # already carries a v2-only type cannot raise spuriously.
+        # already carries a gated type cannot raise spuriously.
         self._check_monitor_type_supported(kwargs.get("type"))
 
         # Decide from kwargs BEFORE the merge, then merge only what survives.
         #
         # Deleting keys after the merge would be the wrong shape: del data[key]
         # cannot tell a key the caller supplied from one getMonitor returned, so a
-        # monitor already carrying a v2-only column would lose it on any unrelated
+        # monitor already carrying a gated column would lose it on any unrelated
         # edit. Computing the withheld set from kwargs keeps the server's own data
         # untouched.
         #
         # No monitor type is passed, so the version comparison applies but the
         # per-field type restriction does not. edit_monitor names no type, and
         # enforcing the restriction from a kwargs lookup would drop a field on
-        # every ordinary edit call at every version, 2.x included. Leaving the
-        # restriction off costs nothing there -- a field at or above its floor is
-        # never withheld -- while still keeping a below-floor column off the wire.
-        withheld = self._withheld_v2_fields(kwargs)
+        # every ordinary edit call at every version. Leaving the restriction off
+        # costs nothing there -- a field at or above its floor is never withheld
+        # -- while still keeping a below-floor column off the wire.
+        withheld = self._withheld_monitor_fields(kwargs)
         # stacklevel 3: this method, the caller. The helper adds one more frame.
         # Warned before get_monitor so an escalated warning costs no round trip.
-        self._warn_withheld_v2_fields(withheld, stacklevel=3)
+        self._warn_withheld_monitor_fields(withheld, stacklevel=3)
 
         data = self.get_monitor(id_)
         data.update({k: v for k, v in kwargs.items() if k not in withheld})
@@ -2782,9 +2641,9 @@ class UptimeKumaApi(object):
         """
         Get a status page.
 
-        Uptime Kuma 2.1.0 renamed the singular ``incident`` object to a plural
-        ``incidents`` array. Both keys are always returned regardless of server
-        version: ``incidents`` holds the full list, and ``incident`` holds the
+        The server uses a plural ``incidents`` array, and the earlier singular
+        ``incident`` object is kept for backward compatibility. Both keys are
+        always returned: ``incidents`` holds the full list, and ``incident`` holds the
         first entry (or ``None``) for backward compatibility.
 
         :param str slug: Slug
@@ -2861,10 +2720,10 @@ class UptimeKumaApi(object):
         config = r1["config"]
         config.update(r2["config"])
 
-        # Uptime Kuma 2.1.0 renamed the singular, nullable "incident" object to
-        # a plural "incidents" array (louislam/uptime-kuma#6469). Accept either
+        # The server renamed the singular, nullable "incident" object to a
+        # plural "incidents" array (louislam/uptime-kuma#6469). Accept either
         # shape and expose both: "incidents" carries the full list, while
-        # "incident" keeps the first entry so existing v1-era callers still work.
+        # "incident" keeps the first entry so existing callers still work.
         if "incidents" in r2:
             incidents = r2["incidents"] or []
         elif r2.get("incident"):
@@ -3013,7 +2872,7 @@ class UptimeKumaApi(object):
         #
         # Deleting keys after the merge would be the wrong shape: del data[key]
         # cannot tell a key the caller supplied from one get_status_page returned,
-        # so a status page already carrying a v2-only column would lose it on any
+        # so a status page already carrying a gated column would lose it on any
         # unrelated save. Computing the withheld set from kwargs keeps the
         # server's own data untouched.
         withheld = self._withheld_status_page_fields(kwargs)
@@ -3024,10 +2883,10 @@ class UptimeKumaApi(object):
 
         status_page = self.get_status_page(slug)
         status_page.pop("incident")
-        status_page.pop("incidents", None)  # v2.1.0+ shape, absent on older servers
+        status_page.pop("incidents", None)  # returned alongside "incident"
         status_page.pop("maintenanceList")
         status_page.pop("autoRefreshInterval", None)
-        status_page.pop("googleAnalyticsId", None)  # v2 may still return this legacy field
+        status_page.pop("googleAnalyticsId", None)  # legacy field the server may still return
         status_page.update(
             {k: v for k, v in kwargs.items() if k not in withheld}
         )
@@ -3155,11 +3014,10 @@ class UptimeKumaApi(object):
         """
         Get important heartbeats.
 
-        On Uptime Kuma 2.0 and newer the server no longer pushes this history at
-        login, so it is requested per monitor with the
-        ``monitorImportantHeartbeatListPaged`` event: one round trip per monitor,
-        up to 500 heartbeats each, newest first. The rows keep the keys the
-        server sends (2.x adds ``retries``, and later ``response``).
+        The server does not push this history at login, so it is requested per
+        monitor with the ``monitorImportantHeartbeatListPaged`` event: one round
+        trip per monitor, up to 500 heartbeats each, newest first. The rows keep
+        the keys the server sends.
 
         :return: The important heartbeats for each monitor id.
         :rtype: dict
@@ -3181,27 +3039,19 @@ class UptimeKumaApi(object):
                 ]
             }
         """
-        if self._parsed_version() >= parse_version("2.0"):
-            # 2.x registers monitorImportantHeartbeatListPaged (present since
-            # 2.0.0-beta.0) and never emits importantHeartbeatList, so waiting
-            # for the event would only time out.
-            result = {}
-            for monitor in self.get_monitors():
-                monitor_id = int(monitor["id"])
-                records = self._call(
-                    "monitorImportantHeartbeatListPaged",
-                    (monitor_id, 0, _IMPORTANT_HEARTBEAT_COUNT),
-                )["data"]
-                int_to_bool(records, ["important"])
-                parse_monitor_status(records)
-                result[monitor_id] = records
-            return result
-
-        r = self._get_event_data(Event.IMPORTANT_HEARTBEAT_LIST)
-        for i in r:
-            int_to_bool(r[i], ["important"])
-            parse_monitor_status(r[i])
-        return r
+        # The server registers monitorImportantHeartbeatListPaged and never emits
+        # importantHeartbeatList, so waiting for the event would only time out.
+        result = {}
+        for monitor in self.get_monitors():
+            monitor_id = int(monitor["id"])
+            records = self._call(
+                "monitorImportantHeartbeatListPaged",
+                (monitor_id, 0, _IMPORTANT_HEARTBEAT_COUNT),
+            )["data"]
+            int_to_bool(records, ["important"])
+            parse_monitor_status(records)
+            result[monitor_id] = records
+        return result
 
     # avg ping
 
@@ -3418,11 +3268,11 @@ class UptimeKumaApi(object):
             >>> api.info()
             {
                 'isContainer': True,
-                'latestVersion': '1.23.1',
+                'latestVersion': '3.0.0',
                 'primaryBaseURL': '',
                 'serverTimezone': 'Europe/Berlin',
                 'serverTimezoneOffset': '+02:00',
-                'version': '1.23.1'
+                'version': '3.0.0'
             }
         """
         r = self._get_event_data(Event.INFO)
@@ -3737,14 +3587,10 @@ class UptimeKumaApi(object):
             "trustProxy": trustProxy
         }
 
-        if self._parsed_version() >= parse_version("1.23"):
-            data.update({
-                "chromeExecutable": chromeExecutable,
-            })
-        if self._parsed_version() >= parse_version("1.23.1"):
-            data.update({
-                "nscd": nscd,
-            })
+        data.update({
+            "chromeExecutable": chromeExecutable,
+            "nscd": nscd,
+        })
 
         return self._call('setSettings', (data, password))
 

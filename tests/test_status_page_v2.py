@@ -4,7 +4,7 @@ import unittest
 import warnings
 from pathlib import Path
 from unittest.mock import MagicMock, patch
-from uptime_kuma_api.api import UptimeKumaApi
+from uptime_kuma_api.api import UptimeKumaApi, Event, _STATUS_PAGE_FIELD_FLOORS
 from uptime_kuma_api import UnsupportedFieldWarning
 
 
@@ -17,15 +17,10 @@ class TestStatusPageV2(unittest.TestCase):
 
     def setUp(self):
         self.api_v2 = MagicMock(spec=UptimeKumaApi)
-        self.api_v2.version = "2.4.0"
+        self.api_v2.version = "3.0.0"
         # bind the real version-gate choke point so gates parse self.version
         self.api_v2._parsed_version = UptimeKumaApi._parsed_version.__get__(self.api_v2)
         self.build_v2 = UptimeKumaApi._build_status_page_data.__get__(self.api_v2)
-
-        self.api_v1 = MagicMock(spec=UptimeKumaApi)
-        self.api_v1.version = "1.23.2"
-        self.api_v1._parsed_version = UptimeKumaApi._parsed_version.__get__(self.api_v1)
-        self.build_v1 = UptimeKumaApi._build_status_page_data.__get__(self.api_v1)
 
     # --- Test 1: v2 analytics fields included when provided ---
     def test_v2_analytics_fields_included(self):
@@ -47,26 +42,6 @@ class TestStatusPageV2(unittest.TestCase):
         )
         self.assertNotIn("googleAnalyticsId", config)
 
-    # --- Test 3: v1 googleAnalyticsId included in config ---
-    def test_v1_google_analytics_id_included(self):
-        _, config, _, _ = self.build_v1(
-            slug="test", id=1, title="Test Page",
-            googleAnalyticsId="UA-12345",
-        )
-        self.assertIn("googleAnalyticsId", config)
-        self.assertEqual(config["googleAnalyticsId"], "UA-12345")
-
-    # --- Test 4: v1 v2 analytics params silently discarded ---
-    def test_v1_v2_analytics_params_discarded(self):
-        _, config, _, _ = self.build_v1(
-            slug="test", id=1, title="Test Page",
-            analyticsType="plausible",
-            analyticsId="my-domain.com",
-            analyticsScriptUrl="https://plausible.io/js/script.js",
-        )
-        self.assertNotIn("analyticsType", config)
-        self.assertNotIn("analyticsId", config)
-        self.assertNotIn("analyticsScriptUrl", config)
 
     # --- Test 5: v2 password omitted even when provided ---
     def test_v2_password_omitted(self):
@@ -76,21 +51,6 @@ class TestStatusPageV2(unittest.TestCase):
         )
         self.assertNotIn("password", config)
 
-    # --- Test 6: v1 password included when provided ---
-    def test_v1_password_included(self):
-        _, config, _, _ = self.build_v1(
-            slug="test", id=1, title="Test Page",
-            password="secret123",
-        )
-        self.assertIn("password", config)
-        self.assertEqual(config["password"], "secret123")
-
-    # --- Test 7: v1 password omitted when not provided ---
-    def test_v1_password_omitted_when_not_provided(self):
-        _, config, _, _ = self.build_v1(
-            slug="test", id=1, title="Test Page",
-        )
-        self.assertNotIn("password", config)
 
     # --- Test 8: v2 showOnlyLastHeartbeat and rssTitle included when provided ---
     def test_v2_new_fields_included(self):
@@ -112,21 +72,12 @@ class TestStatusPageV2(unittest.TestCase):
         self.assertNotIn("showOnlyLastHeartbeat", config)
         self.assertNotIn("rssTitle", config)
 
-    # --- Test 10: v1 showOnlyLastHeartbeat and rssTitle omitted regardless of value ---
-    def test_v1_new_fields_omitted_regardless(self):
-        _, config, _, _ = self.build_v1(
-            slug="test", id=1, title="Test Page",
-            showOnlyLastHeartbeat=True,
-            rssTitle="Custom RSS Title",
-        )
-        self.assertNotIn("showOnlyLastHeartbeat", config)
-        self.assertNotIn("rssTitle", config)
 
     # --- Test 11: v2 analytics keys must be PRESENT even when None ---
     def test_v2_analytics_keys_always_present_when_none(self):
-        """Regression: the v2 server rejects the save with "Invalid analytics
+        """Regression: the server rejects the save with "Invalid analytics
         type" when analyticsType is absent from the payload. Verified against
-        2.4.0: null is accepted, an absent key is not. Omitting the key broke
+        3.x: null is accepted, an absent key is not. Omitting the key broke
         save_status_page for every page with no analytics configured, which in
         turn broke post_incident and unpin_incident (both call save)."""
         _, config, _, _ = self.build_v2(slug="test", id=1, title="Test Page")
@@ -144,13 +95,6 @@ class TestStatusPageV2(unittest.TestCase):
         self.assertIsNone(config["analyticsType"])
         self.assertIsNone(config["analyticsId"])
         self.assertIsNone(config["analyticsScriptUrl"])
-
-    # --- Test 13: v1 must NOT gain the v2 analytics keys ---
-    def test_v1_analytics_keys_absent_when_none(self):
-        _, config, _, _ = self.build_v1(slug="test", id=1, title="Test Page")
-        self.assertNotIn("analyticsType", config)
-        self.assertNotIn("analyticsId", config)
-        self.assertNotIn("analyticsScriptUrl", config)
 
 
 class TestGetStatusPageSslVerify(unittest.TestCase):
@@ -400,12 +344,18 @@ class TestGetStatusPageSslVerify(unittest.TestCase):
 
 
 class TestStatusPageWithholdAndWarn(unittest.TestCase):
-    """Tests for the withhold-and-warn rule on status-page v2-only fields.
+    """Withhold-and-warn rule for a version-gated status-page field.
 
-    Warning emission lives in save_status_page, computed from kwargs before
-    the get_status_page round trip. These tests bind the real methods onto a
-    MagicMock and mock the round trip (get_status_page) and server call (_call).
+    No status-page field has a floor above 3.0 today, so the table is empty and
+    these tests patch in a synthetic floor of 3.1 for ``rssTitle`` and
+    ``showOnlyLastHeartbeat`` to prove the mechanism works for the first field a
+    later 3.x release gates. Warning emission lives in save_status_page,
+    computed from kwargs before the get_status_page round trip. These tests bind
+    the real methods onto a MagicMock and mock the round trip (get_status_page)
+    and server call (_call).
     """
+
+    FLOORS = {"showOnlyLastHeartbeat": "3.1", "rssTitle": "3.1"}
 
     # Minimal status page config as get_status_page would return it.
     # Includes the keys save_status_page pops before calling the builder.
@@ -429,6 +379,11 @@ class TestStatusPageWithholdAndWarn(unittest.TestCase):
         "autoRefreshInterval": 300,
     }
 
+    def setUp(self):
+        patcher = patch.dict(_STATUS_PAGE_FIELD_FLOORS, self.FLOORS)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
     def _make_api(self, version):
         api = MagicMock(spec=UptimeKumaApi)
         api.version = version
@@ -448,120 +403,86 @@ class TestStatusPageWithholdAndWarn(unittest.TestCase):
             {"publicGroupList": []},            # saveStatusPage response
             {"config": sp_config},              # getStatusPage response
         ])
-        api._event_data = {None: None}  # minimal event_data stub
-        from uptime_kuma_api.api import Event
         api._event_data = {Event.STATUS_PAGE_LIST: {}}
         return api
 
-    # --- v1 (1.23.2): field withheld, warning emitted ---
+    def _saved_config(self, api):
+        _, config, _, _ = api._call.call_args_list[0][0][1]
+        return config
 
-    def test_v1_showOnlyLastHeartbeat_withheld_and_warned(self):
-        """1.23.2 + showOnlyLastHeartbeat -> absent from payload, one warning."""
-        api = self._make_api("1.23.2")
-        with warnings.catch_warnings(record=True) as caught:
-            warnings.simplefilter("always")
-            self._save("test-sp", showOnlyLastHeartbeat=True)
-        # The field must not appear in the payload passed to _call
-        save_call = api._call.call_args_list[0]
-        _, config, _, _ = save_call[0][1]
-        self.assertNotIn("showOnlyLastHeartbeat", config)
-        # Exactly one UnsupportedFieldWarning
-        relevant = [x for x in caught if issubclass(x.category, UnsupportedFieldWarning)]
-        self.assertEqual(len(relevant), 1)
-        self.assertIn("showOnlyLastHeartbeat", str(relevant[0].message))
-        self.assertIn("2.1", str(relevant[0].message))
-        self.assertIn("1.23.2", str(relevant[0].message))
+    def _warnings(self, caught):
+        return [x for x in caught if issubclass(x.category, UnsupportedFieldWarning)]
 
-    def test_v1_rssTitle_withheld_and_warned(self):
-        """1.23.2 + rssTitle -> absent from payload, one warning."""
-        api = self._make_api("1.23.2")
-        with warnings.catch_warnings(record=True) as caught:
-            warnings.simplefilter("always")
-            self._save("test-sp", rssTitle="Feed")
-        save_call = api._call.call_args_list[0]
-        _, config, _, _ = save_call[0][1]
-        self.assertNotIn("rssTitle", config)
-        relevant = [x for x in caught if issubclass(x.category, UnsupportedFieldWarning)]
-        self.assertEqual(len(relevant), 1)
-        self.assertIn("rssTitle", str(relevant[0].message))
+    # --- below the floor: field withheld, warning emitted ---
 
-    def test_v1_multiple_fields_one_warning(self):
-        """1.23.2 + both fields -> both absent, exactly one warning."""
-        api = self._make_api("1.23.2")
-        with warnings.catch_warnings(record=True) as caught:
-            warnings.simplefilter("always")
-            self._save("test-sp", showOnlyLastHeartbeat=True, rssTitle="Feed")
-        save_call = api._call.call_args_list[0]
-        _, config, _, _ = save_call[0][1]
-        self.assertNotIn("showOnlyLastHeartbeat", config)
-        self.assertNotIn("rssTitle", config)
-        relevant = [x for x in caught if issubclass(x.category, UnsupportedFieldWarning)]
-        self.assertEqual(len(relevant), 1)
-        self.assertIn("showOnlyLastHeartbeat", str(relevant[0].message))
-        self.assertIn("rssTitle", str(relevant[0].message))
-
-    # --- 2.0.2: below the 2.1 floor, same behavior as 1.23.2 ---
-
-    def test_v2_0_2_showOnlyLastHeartbeat_withheld(self):
-        """2.0.2 is below the 2.1 floor -> field withheld, warning emitted.
-
-        This is the only test that distinguishes a 2.1 floor from a 2.0 floor.
-        """
-        api = self._make_api("2.0.2")
-        with warnings.catch_warnings(record=True) as caught:
-            warnings.simplefilter("always")
-            self._save("test-sp", showOnlyLastHeartbeat=True)
-        save_call = api._call.call_args_list[0]
-        _, config, _, _ = save_call[0][1]
-        self.assertNotIn("showOnlyLastHeartbeat", config)
-        relevant = [x for x in caught if issubclass(x.category, UnsupportedFieldWarning)]
-        self.assertEqual(len(relevant), 1)
-        self.assertIn("2.0.2", str(relevant[0].message))
-
-    # --- v2 (2.4.0): field included, no warning ---
-
-    def test_v2_showOnlyLastHeartbeat_included_no_warning(self):
-        """2.4.0 + showOnlyLastHeartbeat -> in payload, no warning."""
-        api = self._make_api("2.4.0")
-        with warnings.catch_warnings(record=True) as caught:
-            warnings.simplefilter("always")
-            self._save("test-sp", showOnlyLastHeartbeat=True)
-        save_call = api._call.call_args_list[0]
-        _, config, _, _ = save_call[0][1]
-        self.assertEqual(config.get("showOnlyLastHeartbeat"), True)
-        relevant = [x for x in caught if issubclass(x.category, UnsupportedFieldWarning)]
-        self.assertEqual(len(relevant), 0)
-
-    def test_v2_rssTitle_included_no_warning(self):
-        """2.4.0 + rssTitle -> in payload, no warning."""
-        api = self._make_api("2.4.0")
-        with warnings.catch_warnings(record=True) as caught:
-            warnings.simplefilter("always")
-            self._save("test-sp", rssTitle="Feed")
-        save_call = api._call.call_args_list[0]
-        _, config, _, _ = save_call[0][1]
-        self.assertEqual(config.get("rssTitle"), "Feed")
-        relevant = [x for x in caught if issubclass(x.category, UnsupportedFieldWarning)]
-        self.assertEqual(len(relevant), 0)
-
-    # --- No opt-in field supplied: no warning at any version ---
-
-    def test_no_opt_in_fields_no_warning(self):
-        """No v2-only field in kwargs -> no warning at any version."""
-        for version in ("1.23.2", "2.0.2", "2.4.0"):
+    def test_below_floor_showOnlyLastHeartbeat_withheld_and_warned(self):
+        for version in ("3.0.0", "3.0.0-beta.2"):
             with self.subTest(version=version):
                 api = self._make_api(version)
                 with warnings.catch_warnings(record=True) as caught:
                     warnings.simplefilter("always")
+                    self._save("test-sp", showOnlyLastHeartbeat=True)
+                self.assertNotIn("showOnlyLastHeartbeat", self._saved_config(api))
+                relevant = self._warnings(caught)
+                self.assertEqual(len(relevant), 1)
+                self.assertIn("showOnlyLastHeartbeat", str(relevant[0].message))
+                self.assertIn("3.1", str(relevant[0].message))
+                self.assertIn(version, str(relevant[0].message))
+
+    def test_below_floor_rssTitle_withheld_and_warned(self):
+        api = self._make_api("3.0.0")
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            self._save("test-sp", rssTitle="Feed")
+        self.assertNotIn("rssTitle", self._saved_config(api))
+        relevant = self._warnings(caught)
+        self.assertEqual(len(relevant), 1)
+        self.assertIn("rssTitle", str(relevant[0].message))
+
+    def test_multiple_fields_one_warning(self):
+        api = self._make_api("3.0.0")
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            self._save("test-sp", showOnlyLastHeartbeat=True, rssTitle="Feed")
+        config = self._saved_config(api)
+        self.assertNotIn("showOnlyLastHeartbeat", config)
+        self.assertNotIn("rssTitle", config)
+        relevant = self._warnings(caught)
+        self.assertEqual(len(relevant), 1)
+        self.assertIn("showOnlyLastHeartbeat", str(relevant[0].message))
+        self.assertIn("rssTitle", str(relevant[0].message))
+
+    # --- at or above the floor: field included, no warning ---
+
+    def test_at_floor_fields_included_no_warning(self):
+        # 3.1.0-beta.1 is gated as its release segment, 3.1
+        for version in ("3.1.0", "3.1.0-beta.1", "3.2.0"):
+            with self.subTest(version=version):
+                api = self._make_api(version)
+                with warnings.catch_warnings(record=True) as caught:
+                    warnings.simplefilter("always")
+                    self._save("test-sp", showOnlyLastHeartbeat=True, rssTitle="Feed")
+                config = self._saved_config(api)
+                self.assertEqual(config.get("showOnlyLastHeartbeat"), True)
+                self.assertEqual(config.get("rssTitle"), "Feed")
+                self.assertEqual(self._warnings(caught), [])
+
+    # --- No opt-in field supplied: no warning at any version ---
+
+    def test_no_opt_in_fields_no_warning(self):
+        for version in ("3.0.0", "3.1.0"):
+            with self.subTest(version=version):
+                self._make_api(version)
+                with warnings.catch_warnings(record=True) as caught:
+                    warnings.simplefilter("always")
                     self._save("test-sp", title="New Title")
-                relevant = [x for x in caught if issubclass(x.category, UnsupportedFieldWarning)]
-                self.assertEqual(len(relevant), 0)
+                self.assertEqual(self._warnings(caught), [])
 
     # --- Escalation: simplefilter("error") -> raises, no payload ---
 
     def test_escalation_raises_before_round_trip(self):
         """simplefilter("error", ...) + opt-in field -> raises before get_status_page."""
-        api = self._make_api("1.23.2")
+        api = self._make_api("3.0.0")
         with warnings.catch_warnings():
             warnings.simplefilter("error", UnsupportedFieldWarning)
             with self.assertRaises(UnsupportedFieldWarning):
@@ -569,13 +490,12 @@ class TestStatusPageWithholdAndWarn(unittest.TestCase):
         # get_status_page must NOT have been called (escalation before round trip)
         api.get_status_page.assert_not_called()
 
-    # --- Server-returned value contract (Req 3.11) ---
+    # --- Server-returned value contract ---
 
     def test_server_returned_value_not_treated_as_request(self):
-        """v1 + get_status_page returns a gated key + caller passes only title
+        """get_status_page returns a gated key + caller passes only title
         -> no warning, server-returned value survives unchanged."""
-        api = self._make_api("1.23.2")
-        # Simulate a server that returns a gated key in its config
+        api = self._make_api("3.0.0")
         sp_with_gated = dict(self.MINIMAL_SP)
         sp_with_gated["showOnlyLastHeartbeat"] = True
         api.get_status_page = MagicMock(return_value=sp_with_gated)
@@ -583,248 +503,48 @@ class TestStatusPageWithholdAndWarn(unittest.TestCase):
             warnings.simplefilter("always")
             self._save("test-sp", title="New Title")
         # No warning -- the gated key came from the server, not from kwargs
-        relevant = [x for x in caught if issubclass(x.category, UnsupportedFieldWarning)]
-        self.assertEqual(len(relevant), 0)
-        # The server-returned value must survive into the payload
-        save_call = api._call.call_args_list[0]
-        _, config, _, _ = save_call[0][1]
-        # Note: _build_status_page_data's is-not-None guard fires here on v1 and
-        # drops the field from the config dict. This is correct -- the builder's
-        # existing behavior on v1 is preserved. The key contract is: NO WARNING.
-        # The server-returned value was not treated as a caller request.
+        self.assertEqual(self._warnings(caught), [])
+        # ... and the server-returned value reaches the payload
+        self.assertEqual(self._saved_config(api).get("showOnlyLastHeartbeat"), True)
 
-class TestMaintenanceNoV2Surface(unittest.TestCase):
-    """Regression guard: maintenance has no v2-only surface.
 
-    _build_maintenance_data produces identical payloads at v1 and v2. If a
-    future change introduces a version gate, this test catches it.
+class TestStatusPageFieldsAreUngated(unittest.TestCase):
+    """With the real (empty) floor table, no status-page field is withheld.
+
+    The analytics trio, ``showOnlyLastHeartbeat`` and ``rssTitle`` used to need
+    an older server. Every supported server accepts them, so they are sent
+    whatever version the stub reports, and ``googleAnalyticsId`` (never read by
+    the server any more) is never sent.
     """
 
-    def _make_api(self, version):
-        api = MagicMock(spec=UptimeKumaApi)
-        api.version = version
-        api._parsed_version = UptimeKumaApi._parsed_version.__get__(api)
-        return UptimeKumaApi._build_maintenance_data.__get__(api)
+    def test_floor_table_is_empty(self):
+        self.assertEqual(_STATUS_PAGE_FIELD_FLOORS, {})
 
-    def test_payload_identical_at_v1_and_v2(self):
-        """_build_maintenance_data produces the same dict at 1.23.2 and 2.4.0."""
-        from uptime_kuma_api import MaintenanceStrategy
+    def test_fields_sent_on_every_version(self):
+        # 2.0.0 and 1.21.3 are not servers this library supports. They are used
+        # as stubs because they selected the old gates, and must not any more.
+        for version in ("3.0.0", "3.0.0-beta.2", "3.1.0", "2.0.0", "1.21.3"):
+            with self.subTest(version=version):
+                api = MagicMock(spec=UptimeKumaApi)
+                api.version = version
+                api._parsed_version = UptimeKumaApi._parsed_version.__get__(api)
+                build = UptimeKumaApi._build_status_page_data.__get__(api)
+                _, config, _, _ = build(
+                    slug="t", id=1, title="T",
+                    showOnlyLastHeartbeat=True, rssTitle="Feed",
+                    googleAnalyticsId="UA-1", password="pw",
+                )
+                self.assertEqual(config["showOnlyLastHeartbeat"], True)
+                self.assertEqual(config["rssTitle"], "Feed")
+                self.assertIn("analyticsType", config)
+                self.assertIn("analyticsId", config)
+                self.assertIn("analyticsScriptUrl", config)
+                self.assertIn("showCertificateExpiry", config)
+                self.assertEqual(config["theme"], "auto")
+                self.assertNotIn("googleAnalyticsId", config)
+                self.assertNotIn("password", config)
 
-        build_v1 = self._make_api("1.23.2")
-        build_v2 = self._make_api("2.4.0")
 
-        kwargs = dict(
-            title="test maintenance",
-            strategy=MaintenanceStrategy.MANUAL,
-            active=True,
-            description="desc",
-            intervalDay=1,
-            weekdays=[],
-            daysOfMonth=[],
-        )
-
-        result_v1 = build_v1(**kwargs)
-        result_v2 = build_v2(**kwargs)
-
-        self.assertEqual(result_v1, result_v2)
-
-
-class TestSettingsNoV2Surface(unittest.TestCase):
-    """Regression guard: settings has no v2-only surface beyond existing gates.
-
-    set_settings at 1.23.2 and 2.4.0 produces payloads that differ only in the
-    existing 1.23 and 1.23.1 gated fields (chromeExecutable, nscd). If a future
-    change introduces a >= 2.0 gate, this test catches it.
-    """
-
-    def _make_api(self, version):
-        api = MagicMock(spec=UptimeKumaApi)
-        api.version = version
-        api._parsed_version = UptimeKumaApi._parsed_version.__get__(api)
-        api.set_settings = UptimeKumaApi.set_settings.__get__(api)
-        api._call = MagicMock(return_value={"msg": "Saved"})
-        return api
-
-    def test_payload_identical_at_v1_and_v2_excluding_known_gates(self):
-        """set_settings payload at 1.23.2 and 2.4.0 differs only by the known
-        1.23/1.23.1 fields (chromeExecutable, nscd)."""
-        api_v1 = self._make_api("1.23.2")
-        api_v2 = self._make_api("2.4.0")
-
-        kwargs = dict(
-            checkUpdate=True,
-            checkBeta=False,
-            keepDataPeriodDays=180,
-            serverTimezone="UTC",
-            entryPage="dashboard",
-            searchEngineIndex=False,
-            primaryBaseURL="",
-            steamAPIKey="",
-            dnsCache=False,
-            tlsExpiryNotifyDays=[7, 14, 21],
-            disableAuth=False,
-            trustProxy=False,
-            # These are the known gated fields:
-            chromeExecutable="/usr/bin/chromium",
-            nscd=True,
-        )
-
-        api_v1.set_settings(**kwargs)
-        api_v2.set_settings(**kwargs)
-
-        payload_v1 = api_v1._call.call_args[0][1][0]
-        payload_v2 = api_v2._call.call_args[0][1][0]
-
-        # Both should have chromeExecutable and nscd (1.23.2 >= 1.23 and >= 1.23.1)
-        self.assertIn("chromeExecutable", payload_v1)
-        self.assertIn("nscd", payload_v1)
-        self.assertIn("chromeExecutable", payload_v2)
-        self.assertIn("nscd", payload_v2)
-
-        # The payloads should be identical — no v2-only difference
-        self.assertEqual(payload_v1, payload_v2)
 
 if __name__ == '__main__':
     unittest.main()
-
-
-class TestStatusPageAnalyticsBoundaryIs2_1(unittest.TestCase):
-    """Issue #41: the status-page analytics boundary is 2.1, not 2.0.
-
-    The three analytics keys and the two fields alongside them first ship in
-    Uptime Kuma 2.1.0, while a 2.0.x server still reads ``googleAnalyticsId``.
-    Gating them at ``2.0`` sent four keys 2.0.x has no columns for and withheld
-    the one it does read, so a caller's ``googleAnalyticsId`` was silently
-    dropped on every save against 2.0.0-2.0.2.
-
-    Provenance is upstream source at tags rather than inference:
-    ``server/socket-handlers/status-page-socket-handler.js`` and
-    ``server/model/status_page.js`` carry ``google_analytics_tag_id`` at 2.0.0
-    and 2.0.2 with no ``analytics_*`` columns; at 2.1.0 the ``analytics_*``
-    columns exist and ``google_analytics_tag_id`` is gone.
-
-    2.0.2 is the version that discriminates: at 1.23.2 and 2.4.0 the pre-fix
-    and post-fix code agree, so a test at either would pass against the bug.
-    """
-
-    ANALYTICS = ("analyticsType", "analyticsId", "analyticsScriptUrl")
-
-    def _build(self, version):
-        api = MagicMock(spec=UptimeKumaApi)
-        api.version = version
-        api._parsed_version = UptimeKumaApi._parsed_version.__get__(api)
-        return UptimeKumaApi._build_status_page_data.__get__(api)
-
-    def _config(self, version, **kwargs):
-        build = self._build(version)
-        _, config, _, _ = build(slug="test", id=1, title="Test Page", **kwargs)
-        return config
-
-    # --- The bug condition: 2.0.x keeps googleAnalyticsId ---
-
-    def test_2_0_2_sends_google_analytics_id(self):
-        """A 2.0.2 server reads googleAnalyticsId, so it must be sent.
-
-        Pre-fix this key was withheld from every 2.0.x save, which is the data
-        loss issue #41 reports.
-        """
-        config = self._config("2.0.2", googleAnalyticsId="UA-123")
-        self.assertIn("googleAnalyticsId", config)
-        self.assertEqual(config["googleAnalyticsId"], "UA-123")
-
-    def test_2_0_2_omits_the_analytics_trio(self):
-        """A 2.0.2 server has no analytics_* columns, so none are sent."""
-        config = self._config("2.0.2", analyticsType="google",
-                              analyticsId="G-1", analyticsScriptUrl="u")
-        for key in self.ANALYTICS:
-            self.assertNotIn(key, config)
-
-    def test_2_0_0_and_2_0_1_behave_as_2_0_2(self):
-        """The whole 2.0.x line is below the floor, not just 2.0.2."""
-        for version in ("2.0.0", "2.0.1", "2.0.2"):
-            with self.subTest(version=version):
-                config = self._config(version, googleAnalyticsId="UA-123",
-                                      analyticsType="google")
-                self.assertIn("googleAnalyticsId", config)
-                self.assertNotIn("analyticsType", config)
-
-    def test_2_0_2_omits_showonlylastheartbeat_and_rsstitle(self):
-        """Both fields have a 2.1 floor in the registry; the builder agrees.
-
-        Pre-fix the builder placed them on a 2.0.x server, one minor version
-        looser than _V2_ONLY_STATUS_PAGE_FIELDS says.
-        """
-        config = self._config("2.0.2", showOnlyLastHeartbeat=True,
-                              rssTitle="Feed")
-        self.assertNotIn("showOnlyLastHeartbeat", config)
-        self.assertNotIn("rssTitle", config)
-
-    # --- The boundary itself ---
-
-    def test_2_1_0_is_the_first_version_with_the_trio(self):
-        """2.1.0 gets the analytics trio and loses googleAnalyticsId."""
-        config = self._config("2.1.0", googleAnalyticsId="UA-123",
-                              analyticsType="google", analyticsId="G-1",
-                              analyticsScriptUrl="u")
-        for key in self.ANALYTICS:
-            self.assertIn(key, config)
-        self.assertNotIn("googleAnalyticsId", config)
-
-    def test_2_1_0_sends_the_trio_even_when_none(self):
-        """The unconditional-send contract applies from the floor upward.
-
-        The server rejects the save outright when analyticsType is absent
-        (verified against 2.4.0), so presence -- not truthiness -- is what
-        matters, and that has to hold at 2.1.0 too, not only at 2.4.0.
-        """
-        config = self._config("2.1.0")
-        for key in self.ANALYTICS:
-            self.assertIn(key, config)
-            self.assertIsNone(config[key])
-
-    def test_pre_release_of_2_1_is_treated_as_2_1(self):
-        """2.1.0-beta.1 introduced the columns, so it must clear the floor.
-
-        _parsed_version compares on the release segment, so a pre-release of
-        the very version that adds a field is not rejected by its own floor --
-        the same trap the #28 per-type floors had to avoid.
-        """
-        config = self._config("2.1.0-beta.1")
-        for key in self.ANALYTICS:
-            self.assertIn(key, config)
-        self.assertNotIn("googleAnalyticsId", config)
-
-    # --- Unchanged behaviour on either side ---
-
-    def test_1_23_2_unchanged(self):
-        """v1 behaviour is untouched: googleAnalyticsId in, trio out."""
-        config = self._config("1.23.2", googleAnalyticsId="UA-123",
-                              analyticsType="google")
-        self.assertEqual(config["googleAnalyticsId"], "UA-123")
-        for key in self.ANALYTICS:
-            self.assertNotIn(key, config)
-
-    def test_2_4_0_unchanged(self):
-        """2.x behaviour above the floor is untouched."""
-        config = self._config("2.4.0", googleAnalyticsId="UA-123",
-                              analyticsType="google", analyticsId="G-1",
-                              analyticsScriptUrl="u",
-                              showOnlyLastHeartbeat=True, rssTitle="Feed")
-        self.assertEqual(config["analyticsType"], "google")
-        self.assertNotIn("googleAnalyticsId", config)
-        self.assertTrue(config["showOnlyLastHeartbeat"])
-        self.assertEqual(config["rssTitle"], "Feed")
-
-    # --- password is a separate boundary and really is 2.0 ---
-
-    def test_password_boundary_stays_at_2_0(self):
-        """password is ignored by the v2 server; its 2.0 boundary is unchanged.
-
-        Upstream comments the assignment out at 1.23.2, 2.0.0 and 2.1.0 alike,
-        so the analytics boundary being wrong says nothing about this one.
-        """
-        self.assertIn("password", self._config("1.23.2", password="secret"))
-        for version in ("2.0.2", "2.1.0", "2.4.0"):
-            with self.subTest(version=version):
-                self.assertNotIn(
-                    "password", self._config(version, password="secret"))
