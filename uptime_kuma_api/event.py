@@ -21,8 +21,6 @@ class Event(str, Enum):
     STATUS_PAGE_LIST = "statusPageList"
     HEARTBEAT_LIST = "heartbeatList"
     IMPORTANT_HEARTBEAT_LIST = "importantHeartbeatList"
-    AVG_PING = "avgPing"
-    UPTIME = "uptime"
     HEARTBEAT = "heartbeat"
     INFO = "info"
     CERT_INFO = "certInfo"

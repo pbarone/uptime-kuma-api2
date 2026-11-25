@@ -658,8 +658,6 @@ class UptimeKumaApi(object):
         self.sio.on(Event.STATUS_PAGE_LIST, self._event_status_page_list)
         self.sio.on(Event.HEARTBEAT_LIST, self._event_heartbeat_list)
         self.sio.on(Event.IMPORTANT_HEARTBEAT_LIST, self._event_important_heartbeat_list)
-        self.sio.on(Event.AVG_PING, self._event_avg_ping)
-        self.sio.on(Event.UPTIME, self._event_uptime)
         self.sio.on(Event.HEARTBEAT, self._event_heartbeat)
         self.sio.on(Event.INFO, self._event_info)
         self.sio.on(Event.CERT_INFO, self._event_cert_info)
@@ -712,8 +710,6 @@ class UptimeKumaApi(object):
             Event.STATUS_PAGE_LIST: None,
             Event.HEARTBEAT_LIST: None,
             Event.IMPORTANT_HEARTBEAT_LIST: None,
-            Event.AVG_PING: None,
-            Event.UPTIME: None,
             Event.INFO: None,
             Event.CERT_INFO: None,
             Event.DOCKER_HOST_LIST: None,
@@ -732,7 +728,7 @@ class UptimeKumaApi(object):
         self._dashboard_rendered_sent = True
         self.sio.emit("dashboardRendered")
     def _get_event_data(self, event) -> Any:
-        monitor_events = [Event.AVG_PING, Event.UPTIME, Event.HEARTBEAT_LIST, Event.IMPORTANT_HEARTBEAT_LIST, Event.CERT_INFO, Event.HEARTBEAT]
+        monitor_events = [Event.STATS, Event.HEARTBEAT_LIST, Event.IMPORTANT_HEARTBEAT_LIST, Event.CERT_INFO, Event.HEARTBEAT]
         timestamp = time.time()
         while self._event_data[event] is None:
             if time.time() - timestamp > self.timeout:
@@ -837,22 +833,6 @@ class UptimeKumaApi(object):
             self._event_data[Event.IMPORTANT_HEARTBEAT_LIST][monitor_id] = data
         else:
             self._event_data[Event.IMPORTANT_HEARTBEAT_LIST][monitor_id].extend(data)
-
-    def _event_avg_ping(self, monitor_id, data) -> None:
-        monitor_id = int(monitor_id)
-
-        if self._event_data[Event.AVG_PING] is None:
-            self._event_data[Event.AVG_PING] = {}
-        self._event_data[Event.AVG_PING][monitor_id] = data
-
-    def _event_uptime(self, monitor_id, type_, data) -> None:
-        monitor_id = int(monitor_id)
-
-        if self._event_data[Event.UPTIME] is None:
-            self._event_data[Event.UPTIME] = {}
-        if monitor_id not in self._event_data[Event.UPTIME]:
-            self._event_data[Event.UPTIME][monitor_id] = {}
-        self._event_data[Event.UPTIME][monitor_id][type_] = data
 
     def _event_heartbeat(self, data) -> None:
         if self._event_data[Event.HEARTBEAT_LIST] is None:
@@ -3158,6 +3138,10 @@ class UptimeKumaApi(object):
         """
         Get average ping.
 
+        Each monitor id maps to the average ping in milliseconds over the last
+        24 hours (``24``), 30 days (``720``) and one year (``"1y"``). A value is
+        ``None`` when the monitor has no completed check in that window.
+
         :return: The average ping for each monitor id.
         :rtype: dict
 
@@ -3165,10 +3149,18 @@ class UptimeKumaApi(object):
 
             >>> api.avg_ping()
             {
-                1: 10
+                1: {
+                    24: 10.5,
+                    720: 11.2,
+                    '1y': 12.0
+                }
             }
         """
-        return self._get_event_data(Event.AVG_PING)
+        stats = self._get_event_data(Event.STATS) or {}
+        return {
+            monitor_id: {24: s["avgPing"], 720: s["avgPing720"], "1y": s["avgPing1y"]}
+            for monitor_id, s in stats.items()
+        }
 
     # cert info
 
@@ -3338,6 +3330,9 @@ class UptimeKumaApi(object):
         """
         Get monitor uptime.
 
+        Each monitor id maps to the uptime ratio (0 to 1, as the server sends it)
+        over the last 24 hours (``24``), 30 days (``720``) and one year (``"1y"``).
+
         :return: Monitor uptime.
         :rtype: dict
 
@@ -3347,11 +3342,16 @@ class UptimeKumaApi(object):
             {
                 1: {
                     24: 1,
-                    720: 1
+                    720: 1,
+                    '1y': 1
                 }
             }
         """
-        return self._get_event_data(Event.UPTIME)
+        stats = self._get_event_data(Event.STATS) or {}
+        return {
+            monitor_id: {24: s["uptime24"], 720: s["uptime720"], "1y": s["uptime1y"]}
+            for monitor_id, s in stats.items()
+        }
 
     # info
 
