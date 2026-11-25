@@ -1,4 +1,10 @@
 ## Changelog
+### Unreleased
+
+#### BREAKING CHANGES
+
+- `UptimeKumaApi()` and `connect()` now raise `UptimeKumaException` when the server is older than Uptime Kuma 3.0 (1.x or 2.x), with a message saying to install `uptime-kuma-api2<3` for those servers. The check is one `GET /api/auth/ok` request after the socket connects: 1.x and 2.x answer the web UI's HTML there, 3.x answers JSON. Only that HTML answer refuses. A network error, timeout, SSL error, other status or any other body proceeds, so a 3.x server behind an unusual proxy is not refused on a guess. The 2.11.1 behavior (refuse a 3.x server at `login()`) does not carry over to this line, and `login()`, `login_by_token()` and `setup()` no longer probe the server. Uptime Kuma 3.x authentication is still not supported. Refs [#88](https://github.com/pbarone/uptime-kuma-api2/issues/88).
+
 ### Release 2.11.1
 A patch release. Against an Uptime Kuma 3.x server, the auth methods now fail at once with a clear error instead of a timeout. Behavior on 1.x and 2.x servers is unchanged. Uptime Kuma 3.x itself is not supported by this release line; see [#88](https://github.com/pbarone/uptime-kuma-api2/issues/88).
 #### Bugfixes
