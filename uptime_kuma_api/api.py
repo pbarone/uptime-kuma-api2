@@ -730,15 +730,31 @@ class UptimeKumaApi(object):
             Event.STATS: None,
         }
         self._dashboard_rendered_sent = False
+        self._heartbeat_lists_received = False
 
     def _ensure_heartbeat_history(self) -> None:
-        """Ask the server for the deferred heartbeat snapshot, once per connection."""
+        """
+        Ask the server for the deferred heartbeat snapshot, once per connection.
+
+        Uptime Kuma 3 sends ``heartbeatLists`` only after the client emits
+        ``dashboardRendered``. The monitor list arrives after login, so wait
+        for it first: an unpopulated cache (None) does not mean "no monitors".
+        The emit is fire and forget, because the server sends no ack.
+
+        :raises Timeout: If the monitor list does not arrive in time.
+        """
         if self._dashboard_rendered_sent:
             return
+        timestamp = time.time()
+        while self._event_data[Event.MONITOR_LIST] is None:
+            if time.time() - timestamp > self.timeout:
+                raise Timeout(f"Timed out while waiting for event {Event.MONITOR_LIST}")
+            time.sleep(0.01)
         if self._event_data[Event.MONITOR_LIST] == {}:
             return  # no monitors; nothing to request, nothing to wait for
         self._dashboard_rendered_sent = True
         self.sio.emit("dashboardRendered")
+
     def _get_event_data(self, event) -> Any:
         monitor_events = [Event.STATS, Event.HEARTBEAT_LIST, Event.IMPORTANT_HEARTBEAT_LIST, Event.CERT_INFO, Event.HEARTBEAT]
         timestamp = time.time()
@@ -903,6 +919,8 @@ class UptimeKumaApi(object):
             if monitor_id not in cache:
                 cache[monitor_id] = rows
         self._event_data[Event.HEARTBEAT_LIST] = cache
+        self._heartbeat_lists_received = True
+
     def _event_init_server_timezone(self) -> None:
         pass
 
@@ -3008,8 +3026,14 @@ class UptimeKumaApi(object):
         """
         Get heartbeats.
 
+        Uptime Kuma 3 sends the heartbeat history only on request. The first
+        call on a connection emits ``dashboardRendered`` and waits for the
+        ``heartbeatLists`` reply. A server with no monitors returns an empty
+        result at once.
+
         :return: The heartbeats for each monitor id.
         :rtype: dict
+        :raises Timeout: If the server does not send the history in time.
 
         Example::
 
@@ -3041,6 +3065,14 @@ class UptimeKumaApi(object):
                 ]
             }
         """
+        self._ensure_heartbeat_history()
+        # a live heartbeat event can fill the cache before heartbeatLists
+        # arrives, so wait for the snapshot itself while monitors exist
+        timestamp = time.time()
+        while self._event_data[Event.MONITOR_LIST] and not self._heartbeat_lists_received:
+            if time.time() - timestamp > self.timeout:
+                raise Timeout(f"Timed out while waiting for event {Event.HEARTBEAT_LISTS}")
+            time.sleep(0.01)
         r = self._get_event_data(Event.HEARTBEAT_LIST)
         for i in r:
             int_to_bool(r[i], ["important"])
