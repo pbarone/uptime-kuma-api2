@@ -29,7 +29,6 @@ class Event(str, Enum):
     DOCKER_HOST_LIST = "dockerHostList"
     INIT_SERVER_TIMEZONE = "initServerTimezone"
     MAINTENANCE_LIST = "maintenanceList"
-    API_KEY_LIST = "apiKeyList"
     SESSION = "session"
     STATS = "stats"
     HEARTBEAT_LISTS = "heartbeatLists"

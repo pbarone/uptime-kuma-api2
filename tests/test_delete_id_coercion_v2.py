@@ -34,7 +34,8 @@ DELETE_SITES = [
     ("delete_tag", "get_tags", "deleteTag"),
     ("delete_docker_host", "get_docker_hosts", "deleteDockerHost"),
     ("delete_maintenance", "get_maintenances", "deleteMaintenance"),
-    ("delete_api_key", "get_api_keys", "deleteAPIKey"),
+    # delete_api_key is not here: on 3.x its ids are strings and it emits the
+    # id as a string (see the API-key unit tests).
 ]
 
 EXISTING_ID = 371

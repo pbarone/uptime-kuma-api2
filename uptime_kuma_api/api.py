@@ -163,6 +163,21 @@ def int_to_bool(data, keys) -> None:
                 data[key] = True if data[key] == 1 else False
 
 
+def _api_key_status(active: bool, expires) -> str:
+    # The server no longer sends a status, so derive it: expired wins over
+    # active/inactive. An unparseable expiry is treated as not expired.
+    if expires:
+        try:
+            when = datetime.datetime.fromisoformat(str(expires).replace("Z", "+00:00"))
+            if when.tzinfo is None:
+                when = when.replace(tzinfo=datetime.timezone.utc)
+            if when < datetime.datetime.now(datetime.timezone.utc):
+                return "expired"
+        except ValueError:
+            pass
+    return "active" if active else "inactive"
+
+
 def parse_value(data, key, type_, default=None) -> None:
     if not data:
         return
@@ -651,7 +666,6 @@ class UptimeKumaApi(object):
         self.sio.on(Event.DOCKER_HOST_LIST, self._event_docker_host_list)
         self.sio.on(Event.INIT_SERVER_TIMEZONE, self._event_init_server_timezone)
         self.sio.on(Event.MAINTENANCE_LIST, self._event_maintenance_list)
-        self.sio.on(Event.API_KEY_LIST, self._event_api_key_list)
         self.sio.on(Event.SESSION, self._event_session)
         self.sio.on(Event.STATS, self._event_stats)
         self.sio.on(Event.HEARTBEAT_LISTS, self._event_heartbeat_lists)
@@ -704,7 +718,6 @@ class UptimeKumaApi(object):
             Event.CERT_INFO: None,
             Event.DOCKER_HOST_LIST: None,
             Event.MAINTENANCE_LIST: None,
-            Event.API_KEY_LIST: None,
             Event.SESSION: None,
             Event.STATS: None,
         }
@@ -903,9 +916,6 @@ class UptimeKumaApi(object):
 
     def _event_maintenance_list(self, data) -> None:
         self._event_data[Event.MAINTENANCE_LIST] = data
-
-    def _event_api_key_list(self, data) -> None:
-        self._event_data[Event.API_KEY_LIST] = data
 
     # connection
 
@@ -4737,77 +4747,81 @@ class UptimeKumaApi(object):
         """
         Get all api keys.
 
+        Native keys have an opaque string id. Keys carried over from Uptime
+        Kuma 2.x have an id of the form ``legacy-<n>`` and work only on the
+        Prometheus ``/metrics`` endpoint.
+
         :return: All api keys.
         :rtype: list
         :raises UptimeKumaException: If the server returns an error.
 
         Example::
 
-            >>> api.get_api_key_list()
+            >>> api.get_api_keys()
             [
                 {
-                    "id": 1,
+                    "id": "kV3p0xYt9QmZ",
                     "name": "test",
-                    "userID": 1,
-                    "createdDate": "2023-03-20 11:15:05",
-                    "active": False,
-                    "expires": null,
-                    "status": "inactive"
+                    "start": "uk_9X",
+                    "createdDate": "2026-03-20T11:15:05.000Z",
+                    "active": True,
+                    "expires": None,
+                    "status": "active"
                 },
                 {
-                    "id": 2,
+                    "id": "legacy-2",
                     "name": "test2",
-                    "userID": 1,
                     "createdDate": "2023-03-20 11:20:29",
-                    "active": True,
+                    "active": False,
                     "expires": "2023-03-30 12:20:00",
-                    "status": "active"
+                    "status": "expired"
                 }
             ]
         """
+        r = self._call('getAPIKeyList')
+        api_keys = r["apiKeyList"]
+        for api_key in api_keys:
+            api_key["active"] = bool(api_key.pop("enabled", False))
+            api_key["createdDate"] = api_key.pop("createdAt", None)
+            api_key["expires"] = api_key.pop("expiresAt", None)
+            api_key["status"] = _api_key_status(api_key["active"], api_key["expires"])
+        return api_keys
 
-        # TODO: replace with getAPIKeyList?
-
-        r = self._get_event_data(Event.API_KEY_LIST)
-        int_to_bool(r, ["active"])
-        return r
-
-    def get_api_key(self, id_: int) -> dict:
+    def get_api_key(self, id_: Union[int, str]) -> dict:
         """
         Get an api key.
 
-        :param int id_: Id of the api key to get.
+        :param id_: Id of the api key to get. An int is converted to a string before it is compared.
+        :type id_: int or str
         :return: The api key.
         :rtype: dict
         :raises UptimeKumaException: If the api key does not exist.
 
         Example::
 
-            >>> api.get_api_key(1)
+            >>> api.get_api_key("kV3p0xYt9QmZ")
             {
-                "id": 1,
+                "id": "kV3p0xYt9QmZ",
                 "name": "test",
-                "userID": 1,
-                "createdDate": "2023-03-20 11:15:05",
-                "active": False,
-                "expires": null,
-                "status": "inactive"
+                "start": "uk_9X",
+                "createdDate": "2026-03-20T11:15:05.000Z",
+                "active": True,
+                "expires": None,
+                "status": "active"
             }
         """
-        api_keys = self.get_api_keys()
-        for api_key in api_keys:
-            if api_key["id"] == id_:
+        for api_key in self.get_api_keys():
+            if str(api_key["id"]) == str(id_):
                 return api_key
-        raise UptimeKumaException("notification does not exist")
+        raise UptimeKumaException("api key does not exist")
 
-    def add_api_key(self, name: str, expires: str, active: bool) -> dict:
+    def add_api_key(self, name: str, expires: str = None) -> dict:
         """
         Adds a new api key.
 
         :param str name: Name of the api key.
-        :param str expires: Expiration date of the api key. Set to ``None`` to disable expiration.
-        :param bool active: True to activate api key.
-        :return: The server response.
+        :param str, optional expires: Expiration date of the api key. Set to ``None`` to disable expiration.
+        :return: The server response. ``key`` is the secret and is shown only once.
         :rtype: dict
         :raises UptimeKumaException: If the server returns an error.
 
@@ -4815,97 +4829,47 @@ class UptimeKumaApi(object):
 
             >>> api.add_api_key(
             ...     name="test",
-            ...     expires="2023-03-30 12:20:00",
-            ...     active=True
+            ...     expires="2026-03-30 12:20:00"
             ... )
             {
-              "msg": "Added Successfully.",
-              "key": "uk1_9XPRjV7ilGj9CvWRKYiBPq9GLtQs74UzTxKfCxWY",
-              "keyID": 1
+              "msg": "successAdded",
+              "msgi18n": True,
+              "key": "uk_9XPRjV7ilGj9CvWRKYiBPq9GLtQs74UzTxKfCxWY",
+              "keyID": "kV3p0xYt9QmZ"
             }
 
-            >>> api.add_api_key(
-            ...     name="test2",
-            ...     expires=None,
-            ...     active=True
-            ... )
+            >>> api.add_api_key(name="test2")
             {
-              "msg": "Added Successfully.",
-              "key": "uk2_jsB9H1Zmt9eEjycNFMTKgse1B0Vfvb944H4_aRqW",
-              "keyID": 2
+              "msg": "successAdded",
+              "msgi18n": True,
+              "key": "uk_jsB9H1Zmt9eEjycNFMTKgse1B0Vfvb944H4_aRqW",
+              "keyID": "Zq8e1LmN4rTa"
             }
         """
-        data = {
-            "name": name,
-            "expires": expires,
-            "active": 1 if active else 0
-        }
-        with self.wait_for_event(Event.API_KEY_LIST):
-            return self._call('addAPIKey', data)
+        return self._call('addAPIKey', {"name": name, "expires": expires})
 
-    def enable_api_key(self, id_: int) -> dict:
+    def delete_api_key(self, id_: Union[int, str]) -> dict:
         """
-        Enable an api key.
+        Delete an api key.
 
-        :param int id_: Id of the api key to enable.
+        :param id_: Id of the api key to delete. An int is converted to a string before it is compared and sent.
+        :type id_: int or str
         :return: The server response.
         :rtype: dict
-        :raises UptimeKumaException: If the server returns an error.
+        :raises UptimeKumaException: If the api key does not exist or the server returns an error.
 
         Example::
 
-            >>> api.enable_api_key(1)
+            >>> api.delete_api_key("kV3p0xYt9QmZ")
             {
-              "msg": "Enabled Successfully"
+              "msg": "successDeleted",
+              "msgi18n": True
             }
         """
-        with self.wait_for_event(Event.API_KEY_LIST):
-            return self._call('enableAPIKey', id_)
-
-    def disable_api_key(self, id_: int) -> dict:
-        """
-        Disable an api key.
-
-        :param int id_: Id of the api key to disable.
-        :return: The server response.
-        :rtype: dict
-        :raises UptimeKumaException: If the server returns an error.
-
-        Example::
-
-            >>> api.disable_api_key(1)
-            {
-              "msg": "Disabled Successfully."
-            }
-        """
-        with self.wait_for_event(Event.API_KEY_LIST):
-            return self._call('disableAPIKey', id_)
-
-    def delete_api_key(self, id_: int) -> dict:
-        """
-        Enable an api key.
-
-        :param int id_: Id of the api key to delete.
-        :return: The server response.
-        :rtype: dict
-        :raises UptimeKumaException: If the server returns an error.
-
-        Example::
-
-            >>> api.delete_api_key(1)
-            {
-              "msg": "Deleted Successfully."
-            }
-        """
-        with self.wait_for_event(Event.API_KEY_LIST):
-            ids = [i["id"] for i in self.get_api_keys()]
-            try:
-                id_ = int(id_)
-            except (TypeError, ValueError):
-                pass
-            if id_ not in ids:
-                raise UptimeKumaException("api key does not exist")
-            return self._call('deleteAPIKey', id_)
+        id_ = str(id_)
+        if id_ not in [str(i["id"]) for i in self.get_api_keys()]:
+            raise UptimeKumaException("api key does not exist")
+        return self._call('deleteAPIKey', id_)
 
     # helper methods
 
