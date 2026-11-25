@@ -6,10 +6,12 @@ import os
 import random
 import string
 import time
+import urllib.request
 import warnings
 from collections import namedtuple
 from contextlib import contextmanager
 from copy import deepcopy
+from http.cookiejar import eff_request_host
 from typing import Any, Union
 
 import requests
@@ -3143,6 +3145,8 @@ class UptimeKumaApi(object):
                 }
             }
         """
+        # the server sends stats with the deferred lists, after dashboardRendered
+        self._ensure_heartbeat_history()
         stats = self._get_event_data(Event.STATS) or {}
         return {
             monitor_id: {24: s["avgPing"], 720: s["avgPing720"], "1y": s["avgPing1y"]}
@@ -3334,6 +3338,8 @@ class UptimeKumaApi(object):
                 }
             }
         """
+        # the server sends stats with the deferred lists, after dashboardRendered
+        self._ensure_heartbeat_history()
         stats = self._get_event_data(Event.STATS) or {}
         return {
             monitor_id: {24: s["uptime24"], 720: s["uptime720"], "1y": s["uptime1y"]}
@@ -3953,7 +3959,10 @@ class UptimeKumaApi(object):
             raise UptimeKumaException("a session token is required")
         # put the cookie in the jar so logout() can send it, as after login()
         self._auth_session.cookies.clear()
-        self._auth_session.cookies.set("better-auth.session_token", token, path="/")
+        # domain as the jar derives it for a Set-Cookie without Domain, so a rotated
+        # cookie from the server replaces this one instead of sitting beside it
+        domain = eff_request_host(urllib.request.Request(self.url))[1]
+        self._auth_session.cookies.set("better-auth.session_token", token, domain=domain, path="/")
         self._session_cookie = token
         try:
             self._reconnect_with_cookie(token)

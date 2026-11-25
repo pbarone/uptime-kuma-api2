@@ -72,6 +72,26 @@ class TestLoginByToken(unittest.TestCase):
         self.assertEqual(headers["Cookie"], f"better-auth.session_token={TOKEN}")
         self.assertEqual(api._session_cookie, TOKEN)
 
+    def test_token_authenticates_socket_and_calls_work(self):
+        # Mirrors the live finding (task 12.4, 3.0.0-beta.2): the cookie value
+        # login() returns, passed to login_by_token on a fresh client, makes the
+        # server send session + info, and get_monitors then answers.
+        api, sio = _make_api()
+        monitors = {1: {"id": 1, "name": "m1", "type": "http", "active": 1}}
+        authenticate = sio.connect.side_effect
+
+        def connect(*args, **kw):
+            authenticate(*args, **kw)
+            api._event_data[Event.MONITOR_LIST] = monitors
+
+        sio.connect.side_effect = connect
+        result = api.login_by_token(TOKEN)
+        self.assertEqual(result, {"token": TOKEN})
+        headers = sio.connect.call_args.kwargs["headers"]
+        self.assertEqual(headers["Cookie"], f"better-auth.session_token={TOKEN}")
+        self.assertTrue(api._event_data[Event.SESSION])
+        self.assertEqual([m["name"] for m in api.get_monitors()], ["m1"])
+
     def test_public_headers_not_mutated(self):
         api, _ = _make_api(headers={"X-Custom": "1"})
         api.login_by_token(TOKEN)
@@ -171,6 +191,31 @@ class TestLogout(unittest.TestCase):
             with self.assertRaises(UptimeKumaException):
                 api.logout()
         self.assertEqual(send.call_count, 1)
+
+
+class TestRotatedCookieAfterLoginByToken(unittest.TestCase):
+    """Live finding (task 12.4): the server rotates the session cookie in a
+    Set-Cookie header (for example on two-factor disable). A cookie seeded by
+    login_by_token without the jar's default domain was not replaced by the
+    rotated one, so both were sent and the stale one won (HTTP 401)."""
+
+    @staticmethod
+    def _rotating_response(new_value):
+        from http.client import HTTPMessage
+        msg = HTTPMessage()
+        msg.add_header("Set-Cookie", f"better-auth.session_token={new_value}; Path=/; HttpOnly")
+        r = _response(200, {"status": True})
+        r.raw = SimpleNamespace(_original_response=SimpleNamespace(msg=msg))
+        return r
+
+    def test_rotated_cookie_replaces_the_one_from_login_by_token(self):
+        api, _ = _make_api()
+        api.login_by_token(TOKEN)
+        with _transport(self._rotating_response("rotated.sig"), _response(200, {})) as send:
+            api._auth_request("POST", "/api/auth/two-factor/disable", {}, use_session_cookie=True)
+            api._auth_request("POST", "/api/auth/change-password", {}, use_session_cookie=True)
+        second = _requests(send)[1]
+        self.assertEqual(second.headers["Cookie"], "better-auth.session_token=rotated.sig")
 
 
 if __name__ == "__main__":

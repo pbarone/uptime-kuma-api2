@@ -103,5 +103,37 @@ class TestOldEventsRemoved(unittest.TestCase):
         self.assertNotIn("uptime", [e.value for e in Event])
 
 
+class TestStatsRequestsDashboardRendered(unittest.TestCase):
+    """Live finding (task 12.4): the server sends `stats` only inside the
+    deferred lists, after the client emits dashboardRendered. uptime() and
+    avg_ping() called first on a connection never emitted it and timed out."""
+
+    def _emits(self, api):
+        return [c.args[0] for c in api.sio.emit.call_args_list]
+
+    def test_uptime_emits_dashboard_rendered(self):
+        api = _make_api()
+        api._event_stats(PAYLOAD)
+        api.uptime()
+        self.assertEqual(self._emits(api), ["dashboardRendered"])
+
+    def test_avg_ping_emits_dashboard_rendered(self):
+        api = _make_api()
+        api._event_stats(PAYLOAD)
+        api.avg_ping()
+        self.assertEqual(self._emits(api), ["dashboardRendered"])
+
+    def test_one_emit_across_uptime_and_avg_ping(self):
+        api = _make_api()
+        api._event_stats(PAYLOAD)
+        api.uptime()
+        api.avg_ping()
+        self.assertEqual(self._emits(api), ["dashboardRendered"])
+
+    def test_no_emit_for_empty_server(self):
+        api = _make_api(monitors=False)
+        self.assertEqual(api.uptime(), {})
+        self.assertEqual(self._emits(api), [])
+
 if __name__ == "__main__":
     unittest.main()
