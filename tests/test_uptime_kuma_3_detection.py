@@ -1,18 +1,14 @@
 """
-The 2.x library against an Uptime Kuma 3.x server (issue #89).
+Refuse servers older than Uptime Kuma 3.0 at connect time (issue #88).
 
-Uptime Kuma 3.0 removed the socket.io ``login``, ``loginByToken`` and ``setup``
-events. Before this fix the library connected, emitted ``login``, waited out the
-timeout and raised ``Timeout`` with nothing saying the server version was the
-cause. Now ``login``, ``login_by_token`` and ``setup`` first check
-``GET /api/auth/ok`` (JSON ``{"ok": true}`` on 3.x, the web UI's HTML on 1.x and
-2.x) and raise a clear ``UptimeKumaException`` on 3.x.
+This line of the library supports Uptime Kuma 3.x only. ``connect`` (called by
+``UptimeKumaApi()``) probes ``GET /api/auth/ok`` after the socket connects:
+1.x and 2.x answer the web UI's HTML for that unknown path, 3.x answers JSON.
+Only positive evidence of an older server (200, text/html, body mentioning
+"Uptime Kuma") refuses. Any other answer proceeds, so a 3.x server behind an
+odd proxy is never blocked.
 
-The other half matters as much: anything that is not that JSON answer must leave
-1.x and 2.x behavior unchanged, including network errors and odd proxies.
-
-No live server: ``connect`` and the socket.io client are patched, and
-``requests.get`` is mocked.
+No live server: the socket.io client is patched and ``requests.get`` is mocked.
 """
 import unittest
 from unittest.mock import MagicMock, patch
@@ -24,12 +20,15 @@ from uptime_kuma_api.exceptions import Timeout
 
 URL = "http://kuma.invalid:3001"
 
+UI_HTML = "<html><head><title>Uptime Kuma</title></head><body></body></html>"
+
 
 def _response(status=200, content_type="application/json", json_body=None,
-              json_error=None):
+              json_error=None, text=""):
     r = MagicMock()
     r.status_code = status
     r.headers = {"content-type": content_type}
+    r.text = text
     if json_error is not None:
         r.json.side_effect = json_error
     else:
@@ -37,68 +36,52 @@ def _response(status=200, content_type="application/json", json_body=None,
     return r
 
 
-V3_RESPONSE = _response(json_body={"ok": True})
-V2_HTML_RESPONSE = _response(content_type="text/html; charset=utf-8",
-                             json_error=ValueError("not json"))
+PRE_3_RESPONSE = _response(content_type="text/html; charset=utf-8", text=UI_HTML,
+                           json_error=ValueError("not json"))
 
 
-class _ApiMixin:
-    def _api(self, **kwargs):
-        with patch("uptime_kuma_api.api.UptimeKumaApi.connect"), \
-                patch("uptime_kuma_api.api.socketio.Client") as client_cls:
-            client_cls.return_value = MagicMock()
-            api = UptimeKumaApi(URL, **kwargs)
-        api._call = MagicMock(return_value={"token": "t"})
-        return api
+def _construct(get, response=None, error=None, sio_error=None, **kwargs):
+    """Build UptimeKumaApi without patching connect; return (api, sio)."""
+    if error is not None:
+        get.side_effect = error
+    else:
+        get.return_value = response
+    with patch("uptime_kuma_api.api.socketio.Client") as client_cls:
+        sio = MagicMock()
+        if sio_error is not None:
+            sio.connect.side_effect = sio_error
+        client_cls.return_value = sio
+        api = UptimeKumaApi(URL, **kwargs)
+    return api, sio
 
 
 @patch("uptime_kuma_api.api.requests.get")
-class TestUptimeKuma3Refused(_ApiMixin, unittest.TestCase):
-    """On a 3.x server, the auth entry points raise before emitting anything."""
-
-    def _assert_refused(self, call):
-        with self.assertRaises(UptimeKumaException) as ctx:
-            call()
+class TestPre3Refused(unittest.TestCase):
+    def test_refused_with_clear_message(self, get):
+        with patch("uptime_kuma_api.api.socketio.Client") as client_cls:
+            sio = MagicMock()
+            client_cls.return_value = sio
+            get.return_value = PRE_3_RESPONSE
+            with self.assertRaises(UptimeKumaException) as ctx:
+                UptimeKumaApi(URL)
         message = str(ctx.exception)
-        self.assertIn("Uptime Kuma 3.x", message)
-        self.assertIn("uptime-kuma-api2>=3", message)
-        # Not the Timeout subclass: the point is to stop waiting it out.
+        self.assertIn("older than Uptime Kuma 3.0", message)
+        self.assertIn("uptime-kuma-api2<3", message)
         self.assertNotIsInstance(ctx.exception, Timeout)
+        sio.connect.assert_called_once()
+        sio.disconnect.assert_called_once()
 
-    def test_login_refused(self, get):
-        get.return_value = V3_RESPONSE
-        api = self._api()
-        self._assert_refused(lambda: api.login("admin", "secret"))
-        api._call.assert_not_called()
-
-    def test_autologin_refused(self, get):
-        """login() without credentials would otherwise wait for autoLogin."""
-        get.return_value = V3_RESPONSE
-        api = self._api()
-        self._assert_refused(lambda: api.login())
-
-    def test_login_by_token_refused(self, get):
-        get.return_value = V3_RESPONSE
-        api = self._api()
-        self._assert_refused(lambda: api.login_by_token("token"))
-        api._call.assert_not_called()
-
-    def test_setup_refused(self, get):
-        get.return_value = V3_RESPONSE
-        api = self._api()
-        self._assert_refused(lambda: api.setup("admin", "secret"))
-        api._call.assert_not_called()
-
-    def test_extra_keys_in_ok_response_still_detected(self, get):
-        get.return_value = _response(json_body={"ok": True, "extra": 1})
-        api = self._api()
-        self._assert_refused(lambda: api.login("admin", "secret"))
+    def test_explicit_connect_refused(self, get):
+        api, _ = _construct_unconnected()
+        get.return_value = PRE_3_RESPONSE
+        with self.assertRaises(UptimeKumaException) as ctx:
+            api.connect()
+        self.assertIn("older than Uptime Kuma 3.0", str(ctx.exception))
 
     def test_request_uses_instance_settings(self, get):
-        get.return_value = V3_RESPONSE
-        api = self._api(timeout=7, headers={"X-Proxy": "1"}, ssl_verify=False)
         with self.assertRaises(UptimeKumaException):
-            api.login("admin", "secret")
+            _construct(get, PRE_3_RESPONSE, timeout=7,
+                       headers={"X-Proxy": "1"}, ssl_verify=False)
         get.assert_called_once_with(
             f"{URL}/api/auth/ok",
             headers={"X-Proxy": "1"},
@@ -106,42 +89,40 @@ class TestUptimeKuma3Refused(_ApiMixin, unittest.TestCase):
             verify=False,
         )
 
-    def test_checked_once_per_instance(self, get):
-        get.return_value = V3_RESPONSE
-        api = self._api()
-        for _ in range(3):
-            with self.assertRaises(UptimeKumaException):
-                api.login("admin", "secret")
-        self.assertEqual(get.call_count, 1)
+
+def _construct_unconnected():
+    with patch("uptime_kuma_api.api.UptimeKumaApi.connect"), \
+            patch("uptime_kuma_api.api.socketio.Client") as client_cls:
+        sio = MagicMock()
+        client_cls.return_value = sio
+        api = UptimeKumaApi(URL)
+    return api, sio
 
 
 @patch("uptime_kuma_api.api.requests.get")
-class TestOlderServersUnchanged(_ApiMixin, unittest.TestCase):
-    """Anything that isn't the 3.x JSON answer keeps today's behavior."""
-
-    NOT_V3 = {
-        "2.x / 1.x web UI html": V2_HTML_RESPONSE,
-        "404": _response(status=404, content_type="text/html", json_body=None),
-        "500 with json": _response(status=500, json_body={"ok": True}),
-        "json ok false": _response(json_body={"ok": False}),
-        "json ok truthy string": _response(json_body={"ok": "true"}),
-        "json list": _response(json_body=[{"ok": True}]),
+class TestInconclusiveProceeds(unittest.TestCase):
+    """Anything but positive evidence of an older server connects normally."""
+    ANSWERS = {
+        "3.x json ok": _response(json_body={"ok": True}),
+        "404 html": _response(status=404, content_type="text/html", text=UI_HTML),
+        "500 html": _response(status=500, content_type="text/html", text=UI_HTML),
+        "200 html without Uptime Kuma": _response(
+            content_type="text/html", text="<html>Please sign in</html>"),
+        "200 json ok false": _response(json_body={"ok": False}),
+        "200 json list": _response(json_body=[{"ok": True}]),
         "json content type, bad body": _response(json_error=ValueError("bad")),
-        "html with json-looking body": _response(content_type="text/html",
-                                                 json_body={"ok": True}),
+        "200 json mentioning Uptime Kuma": _response(
+            content_type="application/json", text=UI_HTML),
     }
 
-    def test_login_proceeds_for_every_non_v3_answer(self, get):
-        for label, response in self.NOT_V3.items():
-            with self.subTest(response=label):
-                get.return_value = response
-                api = self._api()
-                self.assertEqual(api.login("admin", "secret"), {"token": "t"})
-                api._call.assert_called_once_with("login", {
-                    "username": "admin", "password": "secret", "token": "",
-                })
+    def test_answers_proceed(self, get):
+        for label, response in self.ANSWERS.items():
+            with self.subTest(answer=label):
+                api, sio = _construct(get, response)
+                sio.connect.assert_called_once()
+                sio.disconnect.assert_not_called()
 
-    def test_login_proceeds_on_request_errors(self, get):
+    def test_request_errors_proceed(self, get):
         errors = [
             requests.exceptions.ConnectionError("refused"),
             requests.exceptions.Timeout("slow"),
@@ -150,23 +131,36 @@ class TestOlderServersUnchanged(_ApiMixin, unittest.TestCase):
         ]
         for error in errors:
             with self.subTest(error=type(error).__name__):
-                get.side_effect = error
-                api = self._api()
-                self.assertEqual(api.login("admin", "secret"), {"token": "t"})
+                api, sio = _construct(get, error=error)
+                sio.connect.assert_called_once()
+                sio.disconnect.assert_not_called()
 
-    def test_login_by_token_and_setup_proceed(self, get):
-        get.return_value = V2_HTML_RESPONSE
-        api = self._api()
+
+@patch("uptime_kuma_api.api.requests.get")
+class TestSocketFailure(unittest.TestCase):
+    def test_socket_failure_is_unable_to_connect_and_skips_probe(self, get):
+        """A 3.x server still in database setup serves HTML but mounts no
+        socket.io; the user must see "unable to connect", not "older"."""
+        get.return_value = PRE_3_RESPONSE
+        with self.assertRaises(UptimeKumaException) as ctx:
+            _construct(get, PRE_3_RESPONSE, sio_error=RuntimeError("boom"))
+        self.assertEqual(str(ctx.exception), "unable to connect")
+        get.assert_not_called()
+
+
+@patch("uptime_kuma_api.api.requests.get")
+class TestAuthCallsDoNotProbe(unittest.TestCase):
+    def test_login_login_by_token_and_setup_reach_call(self, get):
+        get.side_effect = AssertionError("auth calls must not probe")
+        api, _ = _construct_unconnected()
+        api._call = MagicMock(return_value={"token": "t"})
+        api.login("admin", "secret")
         api.login_by_token("token")
         api.setup("admin", "secret")
         self.assertEqual(
             [c.args[0] for c in api._call.call_args_list],
-            ["loginByToken", "setup"],
+            ["login", "loginByToken", "setup"],
         )
-
-    def test_no_request_until_an_auth_call(self, get):
-        """Constructing the client adds no HTTP request."""
-        self._api()
         get.assert_not_called()
 
 
