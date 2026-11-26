@@ -17,8 +17,7 @@ class TestSettings(UptimeKumaTestCase):
             "tlsExpiryNotifyDays": [7, 14, 21],
             "disableAuth": False,
             "trustProxy": False,
-            "serverTimezone": "Europe/Berlin",
-            "dnsCache": True
+            "serverTimezone": "Europe/Berlin"
         }
 
         # set settings
