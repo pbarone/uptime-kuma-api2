@@ -1,4 +1,7 @@
 ## Changelog
+### Unreleased
+#### Bugfixes
+- `add_monitor()` and `edit_monitor()` raised `KeyError` for `MonitorType.MANUAL`, `WEBSOCKET_UPGRADE`, `GLOBALPING` and `SIP_OPTIONS`, types the library lists and Uptime Kuma 2.0 and 2.1 support. The required-argument check looks each type up in a table of required fields, and these four were never added to it; the unit tests for them skipped that check. They are in the table now: `MANUAL` needs nothing extra, `WEBSOCKET_UPGRADE` needs `url`, `SIP_OPTIONS` needs `hostname`, and `GLOBALPING` needs `subtype` (`ping`, `http` or `dns`) plus `url` for `http` or `hostname` otherwise. A new test checks that every `MonitorType` member has an entry. Live-verified against Uptime Kuma 2.1.0 and 2.5.12. Closes [#98](https://github.com/pbarone/uptime-kuma-api2/issues/98).
 ### Release 2.11.1
 A patch release. Against an Uptime Kuma 3.x server, the auth methods now fail at once with a clear error instead of a timeout. Behavior on 1.x and 2.x servers is unchanged. Uptime Kuma 3.x itself is not supported by this release line; see [#88](https://github.com/pbarone/uptime-kuma-api2/issues/88).
 #### Bugfixes
