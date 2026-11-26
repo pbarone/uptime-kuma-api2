@@ -522,6 +522,10 @@ def _check_arguments_notification(kwargs) -> None:
     type_ = kwargs["type"]
     required_args = [i for i, j in notification_provider_options[type_].items() if j["required"]]
     _check_missing_arguments(required_args, kwargs)
+    if type_ == NotificationType.MICROSOFTGRAPH and not any(
+        kwargs.get(i) for i in ('msGraphTo', 'msGraphCC', 'msGraphBCC')
+    ):
+        raise TypeError("missing recipient: at least one of 'msGraphTo', 'msGraphCC' or 'msGraphBCC' is required")
     _check_argument_conditions(notification_provider_conditions, kwargs)
 
 

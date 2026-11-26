@@ -64,8 +64,6 @@ class NotificationType(str, Enum):
     LINE = "line"
     """LINE Messenger"""
 
-    LINENOTIFY = "LineNotify"
-    """LINE Notify"""
 
     LUNASEA = "lunasea"
     """LunaSea"""
@@ -330,6 +328,14 @@ class NotificationType(str, Enum):
 
     NOTIFYAPP = "notifyapp"
     """Notify!"""
+    INDIGO = "Indigo"
+    """Indigo"""
+    MICROSOFTGRAPH = "MicrosoftGraph"
+    """Microsoft Graph"""
+    OPSIMATE = "OpsiMate"
+    """OpsiMate"""
+    TRIGV = "trigv"
+    """trigv"""
 
 
 notification_provider_options = {
@@ -435,9 +441,6 @@ notification_provider_options = {
     NotificationType.LINE: dict(
         lineChannelAccessToken=dict(type="str", required=True),
         lineUserID=dict(type="str", required=True),
-    ),
-    NotificationType.LINENOTIFY: dict(
-        lineNotifyAccessToken=dict(type="str", required=True),
     ),
     NotificationType.LUNASEA: dict(
         lunaseaTarget=dict(type="str", required=True),
@@ -939,6 +942,33 @@ notification_provider_options = {
         notifyAppDeviceId=dict(type="str", required=True),
         notifyAppToken=dict(type="str", required=True),
         notifyAppIconUrl=dict(type="str", required=False),
+    ),
+    NotificationType.INDIGO: dict(
+        indigoUrl=dict(type="str", required=True),
+        indigoApiKey=dict(type="str", required=True),
+        indigoIgnoreTlsError=dict(type="bool", required=False),
+        indigoVariableId=dict(type="int", required=False),
+        indigoActionGroupId=dict(type="int", required=False),
+    ),
+    NotificationType.MICROSOFTGRAPH: dict(
+        msGraphTenantId=dict(type="str", required=True),
+        msGraphClientId=dict(type="str", required=True),
+        msGraphClientSecret=dict(type="str", required=True),
+        msGraphMailbox=dict(type="str", required=True),
+        msGraphTo=dict(type="str", required=False),
+        msGraphCC=dict(type="str", required=False),
+        msGraphBCC=dict(type="str", required=False),
+        customSubject=dict(type="str", required=False),
+        customBody=dict(type="str", required=False),
+        htmlBody=dict(type="bool", required=False),
+    ),
+    NotificationType.OPSIMATE: dict(
+        opsimateURL=dict(type="str", required=True),
+        opsimateAPIToken=dict(type="str", required=True),
+    ),
+    NotificationType.TRIGV: dict(
+        trigvApiKey=dict(type="str", required=True),
+        trigvChannel=dict(type="str", required=False),
     ),
 }
 
