@@ -2733,6 +2733,13 @@ class UptimeKumaApi(object):
         this method does not return one. Use :meth:`get_incident_history` for
         the full history.
 
+        The incidents come from an HTTP endpoint that the server caches for five
+        minutes. Only :meth:`save_status_page` clears that cache. :meth:`post_incident`,
+        :meth:`edit_incident`, :meth:`resolve_incident` and :meth:`delete_incident`
+        do not, so ``incidents`` can be stale for up to five minutes after one of
+        them. :meth:`unpin_incident` saves the status page and so refreshes it.
+        :meth:`get_incident_history` is not cached; call it for current data.
+
         :param str slug: Slug
         :return: The status page.
         :rtype: dict
@@ -2979,6 +2986,10 @@ class UptimeKumaApi(object):
     ) -> dict:
         """
         Post an incident to status page.
+
+        This does not save the status page, so :meth:`get_status_page` can keep
+        returning its cached ``incidents`` for up to five minutes. See
+        :meth:`get_status_page`.
 
         :param str slug: Slug
         :param str title: Title
