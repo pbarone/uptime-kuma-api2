@@ -204,7 +204,6 @@ def notification_docstring(mode) -> str:
         :param str, optional kookBotToken: Notification option for ``type`` :attr:`~.NotificationType.KOOK`.
         :param str, optional lineChannelAccessToken: Notification option for ``type`` :attr:`~.NotificationType.LINE`.
         :param str, optional lineUserID: Notification option for ``type`` :attr:`~.NotificationType.LINE`.
-        :param str, optional lineNotifyAccessToken: Notification option for ``type`` :attr:`~.NotificationType.LINENOTIFY`.
         :param str, optional lunaseaTarget: Notification option for ``type`` :attr:`~.NotificationType.LUNASEA`. Allowed values: "device", "user".
         :param str lunaseaUserID: Notification option for ``type`` :attr:`~.NotificationType.LUNASEA`. User ID.
         :param str lunaseaDevice: Notification option for ``type`` :attr:`~.NotificationType.LUNASEA`. Device ID.
@@ -400,6 +399,25 @@ def notification_docstring(mode) -> str:
         :param str evolutionApiUrl: Notification option for ``type`` :attr:`~.NotificationType.EVOLUTION_API`. API URL.
         :param bool evolutionUseCustomMessage: Notification option for ``type`` :attr:`~.NotificationType.EVOLUTION_API`. Use custom message.
         :param str evolutionCustomMessage: Notification option for ``type`` :attr:`~.NotificationType.EVOLUTION_API`. Custom message content.
+        :param str, optional indigoUrl: Notification option for ``type`` :attr:`~.NotificationType.INDIGO`. Indigo URL.
+        :param str, optional indigoApiKey: Notification option for ``type`` :attr:`~.NotificationType.INDIGO`. API key.
+        :param bool indigoIgnoreTlsError: Notification option for ``type`` :attr:`~.NotificationType.INDIGO`. Ignore TLS errors.
+        :param int indigoVariableId: Notification option for ``type`` :attr:`~.NotificationType.INDIGO`. Variable ID. Set this, ``indigoActionGroupId``, or both.
+        :param int indigoActionGroupId: Notification option for ``type`` :attr:`~.NotificationType.INDIGO`. Action group ID.
+        :param str, optional msGraphTenantId: Notification option for ``type`` :attr:`~.NotificationType.MICROSOFTGRAPH`. Tenant ID.
+        :param str, optional msGraphClientId: Notification option for ``type`` :attr:`~.NotificationType.MICROSOFTGRAPH`. Client ID.
+        :param str, optional msGraphClientSecret: Notification option for ``type`` :attr:`~.NotificationType.MICROSOFTGRAPH`. Client secret.
+        :param str, optional msGraphMailbox: Notification option for ``type`` :attr:`~.NotificationType.MICROSOFTGRAPH`. Sending mailbox.
+        :param str msGraphTo: Notification option for ``type`` :attr:`~.NotificationType.MICROSOFTGRAPH`. To email addresses. At least one of ``msGraphTo``, ``msGraphCC`` and ``msGraphBCC`` is required.
+        :param str msGraphCC: Notification option for ``type`` :attr:`~.NotificationType.MICROSOFTGRAPH`. CC email addresses.
+        :param str msGraphBCC: Notification option for ``type`` :attr:`~.NotificationType.MICROSOFTGRAPH`. BCC email addresses.
+        :param str customSubject: Notification option for ``type`` :attr:`~.NotificationType.MICROSOFTGRAPH`. Custom subject.
+        :param str customBody: Notification option for ``type`` :attr:`~.NotificationType.MICROSOFTGRAPH`. Custom body.
+        :param bool htmlBody: Notification option for ``type`` :attr:`~.NotificationType.MICROSOFTGRAPH`. Send the custom body as HTML.
+        :param str, optional opsimateURL: Notification option for ``type`` :attr:`~.NotificationType.OPSIMATE`. OpsiMate URL.
+        :param str, optional opsimateAPIToken: Notification option for ``type`` :attr:`~.NotificationType.OPSIMATE`. API token.
+        :param str, optional trigvApiKey: Notification option for ``type`` :attr:`~.NotificationType.TRIGV`. API key.
+        :param str trigvChannel: Notification option for ``type`` :attr:`~.NotificationType.TRIGV`. Channel, defaults to ``general`` on the server.
     """
 
 
