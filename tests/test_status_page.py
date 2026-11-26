@@ -74,13 +74,13 @@ class TestStatusPage(UptimeKumaTestCase):
         self.assertTrue(type(incident["style"]) == IncidentStyle)
         self.compare(incident, incident_expected)
         status_page = self.api.get_status_page(slug)
-        self.compare(status_page["incident"], incident)
-        self.assertTrue(type(status_page["incident"]["style"]) == IncidentStyle)
+        self.assertEqual([i["id"] for i in status_page["incidents"]], [incident["id"]])
+        self.assertTrue(type(status_page["incidents"][0]["style"]) == IncidentStyle)
 
         # unpin incident
         self.api.unpin_incident(slug)
         status_page = self.api.get_status_page(slug)
-        self.assertIsNone(status_page["incident"])
+        self.assertEqual(status_page["incidents"], [])
 
         # delete status page
         self.api.delete_status_page(slug)

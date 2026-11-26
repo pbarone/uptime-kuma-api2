@@ -1,15 +1,10 @@
 """
-Regression tests for the incident -> incidents rename in Uptime Kuma 2.1.0.
+Tests for the ``incidents`` list that get_status_page returns on Uptime Kuma 3.x.
 
-Uptime Kuma 2.1.0 renamed the singular, nullable ``incident`` object returned by
-/api/status-page/{slug} to a plural ``incidents`` array
-(louislam/uptime-kuma#6469).
-
-Two distinct bugs are covered:
-  1. ``KeyError: 'incident'`` when the server no longer sends the singular key.
-  2. Silent data loss: reading only ``incident`` returns None on 2.1.0+ and
-     drops the incidents entirely, which is worse than crashing because callers
-     get a plausible-looking result with no signal that anything was lost.
+Uptime Kuma 3.x sends only the plural ``incidents`` array from
+/api/status-page/{slug}. The singular ``incident`` key of the 2.x line is not
+returned (BREAKING on v3). Reading ``incidents`` must not lose entries, must
+tolerate an absent or null array, and must parse every style.
 
 No live server required: the websocket call and the HTTP fetch are both mocked.
 """
@@ -44,127 +39,50 @@ class TestStatusPageIncidents(unittest.TestCase):
         with patch("uptime_kuma_api.api.requests.get", return_value=response):
             return self.get_status_page("slug1")
 
-    # --- v2.1.0+ shape: plural array ---
+    def _payload(self, **extra):
+        return {"config": {}, "publicGroupList": [], "maintenanceList": [], **extra}
 
-    def test_v2_incidents_array_is_surfaced(self):
+    def test_incidents_array_is_surfaced(self):
         """The full incidents list must reach the caller, not be dropped."""
-        page = self._run({
-            "config": {"title": "status page 1"},
-            "incidents": [INCIDENT_V1],
-            "publicGroupList": [],
-            "maintenanceList": [],
-        })
-        self.assertIn("incidents", page)
+        page = self._run(self._payload(incidents=[INCIDENT_V1]))
         self.assertEqual(len(page["incidents"]), 1)
         self.assertEqual(page["incidents"][0]["title"], "title 1")
 
-    def test_v2_incident_singular_backfilled_from_array(self):
-        """`incident` stays populated so pre-2.1.0 callers keep working."""
-        page = self._run({
-            "config": {},
-            "incidents": [INCIDENT_V1],
-            "publicGroupList": [],
-            "maintenanceList": [],
-        })
-        self.assertIsNotNone(page["incident"])
-        self.assertEqual(page["incident"]["title"], "title 1")
-
-    def test_v2_multiple_incidents_all_returned(self):
+    def test_multiple_incidents_all_returned_in_order(self):
         second = dict(INCIDENT_V1, id=2, title="title 2")
-        page = self._run({
-            "config": {},
-            "incidents": [INCIDENT_V1, second],
-            "publicGroupList": [],
-            "maintenanceList": [],
-        })
-        self.assertEqual(len(page["incidents"]), 2)
-        # singular key exposes the first entry
-        self.assertEqual(page["incident"]["id"], 1)
+        page = self._run(self._payload(incidents=[INCIDENT_V1, second]))
+        self.assertEqual([i["id"] for i in page["incidents"]], [1, 2])
 
-    def test_v2_empty_incidents_array(self):
-        page = self._run({
-            "config": {},
-            "incidents": [],
-            "publicGroupList": [],
-            "maintenanceList": [],
-        })
-        self.assertEqual(page["incidents"], [])
-        self.assertIsNone(page["incident"])
-
-    def test_v2_null_incidents_treated_as_empty(self):
-        page = self._run({
-            "config": {},
-            "incidents": None,
-            "publicGroupList": [],
-            "maintenanceList": [],
-        })
-        self.assertEqual(page["incidents"], [])
-        self.assertIsNone(page["incident"])
-
-    # --- pre-2.1.0 shape: singular nullable object ---
-
-    def test_v1_singular_incident_normalised_to_array(self):
-        page = self._run({
-            "config": {},
-            "incident": INCIDENT_V1,
-            "publicGroupList": [],
-            "maintenanceList": [],
-        })
-        self.assertEqual(len(page["incidents"]), 1)
-        self.assertEqual(page["incident"]["title"], "title 1")
-
-    def test_v1_null_incident(self):
-        page = self._run({
-            "config": {},
-            "incident": None,
-            "publicGroupList": [],
-            "maintenanceList": [],
-        })
-        self.assertEqual(page["incidents"], [])
-        self.assertIsNone(page["incident"])
-
-    # --- neither key present (must not raise) ---
-
-    def test_neither_key_present_does_not_raise(self):
-        """This is the original KeyError crash. Absence must be tolerated."""
-        page = self._run({
-            "config": {},
-            "publicGroupList": [],
-            "maintenanceList": [],
-        })
-        self.assertIsNone(page["incident"])
+    def test_empty_incidents_array(self):
+        page = self._run(self._payload(incidents=[]))
         self.assertEqual(page["incidents"], [])
 
-    # --- style parsing must still apply to every incident ---
+    def test_null_incidents_treated_as_empty(self):
+        page = self._run(self._payload(incidents=None))
+        self.assertEqual(page["incidents"], [])
+
+    def test_absent_incidents_key_does_not_raise(self):
+        page = self._run(self._payload())
+        self.assertEqual(page["incidents"], [])
+
+    def test_singular_incident_key_is_not_returned(self):
+        """The singular key is gone, and a singular payload is not read."""
+        for payload in (
+            self._payload(incidents=[INCIDENT_V1]),
+            self._payload(incident=INCIDENT_V1),
+            self._payload(),
+        ):
+            page = self._run(payload)
+            self.assertNotIn("incident", page)
+        # a pre-2.1 singular payload is ignored: 3.x never sends it
+        self.assertEqual(self._run(self._payload(incident=INCIDENT_V1))["incidents"], [])
 
     def test_incident_style_parsed_for_all_incidents(self):
         from uptime_kuma_api import IncidentStyle
-
         second = dict(INCIDENT_V1, id=2, style="info")
-        page = self._run({
-            "config": {},
-            "incidents": [INCIDENT_V1, second],
-            "publicGroupList": [],
-            "maintenanceList": [],
-        })
+        page = self._run(self._payload(incidents=[INCIDENT_V1, second]))
         self.assertEqual(page["incidents"][0]["style"], IncidentStyle.DANGER)
         self.assertEqual(page["incidents"][1]["style"], IncidentStyle.INFO)
-        # the singular key aliases the same object, so it is parsed too
-        self.assertEqual(page["incident"]["style"], IncidentStyle.DANGER)
-
-    # --- both keys are always present, whatever the server sent ---
-
-    def test_both_keys_always_present(self):
-        for payload in (
-            {"config": {}, "incidents": [INCIDENT_V1]},
-            {"config": {}, "incident": INCIDENT_V1},
-            {"config": {}},
-        ):
-            payload.setdefault("publicGroupList", [])
-            payload.setdefault("maintenanceList", [])
-            page = self._run(payload)
-            self.assertIn("incident", page, f"missing 'incident' for {payload.keys()}")
-            self.assertIn("incidents", page, f"missing 'incidents' for {payload.keys()}")
 
 
 if __name__ == "__main__":

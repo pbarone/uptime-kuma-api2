@@ -208,11 +208,10 @@ def main() -> int:
                 ok,
                 "" if ok else f"expected a dict containing 'slug', got {type(page).__name__}: {page!r}",
             )
-            # The dual-key contract: 2.1.0 renamed incident -> incidents, and
-            # the library returns both regardless of server version.
-            missing = [k for k in ("incident", "incidents") if k not in page]
+            # Uptime Kuma 3.x returns the plural key only.
+            missing = [k for k in ("incidents",) if k not in page]
             record(
-                "response carries both 'incident' and 'incidents'",
+                "response carries 'incidents'",
                 not missing,
                 "" if not missing else f"ABSENT: {', '.join(missing)}",
             )

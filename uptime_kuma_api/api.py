@@ -2728,10 +2728,10 @@ class UptimeKumaApi(object):
         """
         Get a status page.
 
-        The server uses a plural ``incidents`` array, and the earlier singular
-        ``incident`` object is kept for backward compatibility. Both keys are
-        always returned: ``incidents`` holds the full list, and ``incident`` holds the
-        first entry (or ``None``) for backward compatibility.
+        ``incidents`` holds the pinned incidents, as a list that is empty when
+        none is pinned. Uptime Kuma 3.x sends no singular ``incident`` key, and
+        this method does not return one. Use :meth:`get_incident_history` for
+        the full history.
 
         :param str slug: Slug
         :return: The status page.
@@ -2752,15 +2752,6 @@ class UptimeKumaApi(object):
                 'footerText': None,
                 'icon': '/icon.svg',
                 'id': 1,
-                'incident': {
-                    'content': 'content 1',
-                    'createdDate': '2022-12-15 16:51:43',
-                    'id': 1,
-                    'lastUpdatedDate': None,
-                    'pin': 1,
-                    'style': <IncidentStyle.DANGER: 'danger'>,
-                    'title': 'title 1'
-                },
                 'incidents': [
                     {
                         'content': 'content 1',
@@ -2810,23 +2801,12 @@ class UptimeKumaApi(object):
         config = r1["config"]
         config.update(r2["config"])
 
-        # The server renamed the singular, nullable "incident" object to a
-        # plural "incidents" array (louislam/uptime-kuma#6469). Accept either
-        # shape and expose both: "incidents" carries the full list, while
-        # "incident" keeps the first entry so existing callers still work.
-        if "incidents" in r2:
-            incidents = r2["incidents"] or []
-        elif r2.get("incident"):
-            incidents = [r2["incident"]]
-        else:
-            incidents = []
-
+        incidents = r2.get("incidents") or []
         for incident in incidents:
             parse_incident_style(incident)
 
         data = {
             **config,
-            "incident": incidents[0] if incidents else None,
             "incidents": incidents,
             "publicGroupList": r2.get("publicGroupList", []),
             "maintenanceList": r2.get("maintenanceList", [])
@@ -2972,8 +2952,7 @@ class UptimeKumaApi(object):
         self._warn_withheld_status_page_fields(withheld, stacklevel=3)
 
         status_page = self.get_status_page(slug)
-        status_page.pop("incident")
-        status_page.pop("incidents", None)  # returned alongside "incident"
+        status_page.pop("incidents")
         status_page.pop("maintenanceList")
         status_page.pop("autoRefreshInterval", None)
         status_page.update(
@@ -3032,13 +3011,17 @@ class UptimeKumaApi(object):
             "style": style
         }
         r = self._call('postIncident', (slug, incident))["incident"]
-        self.save_status_page(slug)
         parse_incident_style(r)
         return r
 
     def unpin_incident(self, slug: str) -> dict:
         """
-        Unpin an incident from a status page.
+        Unpin every pinned incident on a status page.
+
+        Uptime Kuma 3.x allows several pinned incidents, and this call unpins all
+        of them, not one: the server runs ``UPDATE incident SET pin = 0`` for the
+        status page. To unpin a single incident, use :meth:`resolve_incident`, or
+        :meth:`edit_incident` with ``pin=False``.
 
         :param str slug: Slug
         :return: The server response.
@@ -3053,6 +3036,201 @@ class UptimeKumaApi(object):
         r = self._call('unpinIncident', slug)
         self.save_status_page(slug)
         return r
+
+    def edit_incident(
+            self,
+            slug: str,
+            id_: int,
+            title: str,
+            content: str,
+            style: IncidentStyle = IncidentStyle.PRIMARY,
+            pin: bool = True
+    ) -> dict:
+        """
+        Edit an incident of a status page.
+
+        The server requires a non-blank ``title`` and ``content`` on every call, so
+        both are required here and nothing is filled in from the current incident.
+        ``style`` and ``pin`` take their defaults when not given, they do not keep
+        the stored values.
+
+        :param str slug: Slug
+        :param int id_: Id of the incident
+        :param str title: Title
+        :param str content: Content
+        :param IncidentStyle, optional style: Style, defaults to :attr:`~.IncidentStyle.PRIMARY`
+        :param bool, optional pin: Whether the incident is pinned, defaults to True
+        :return: The updated incident.
+        :rtype: dict
+        :raises UptimeKumaException: If the server returns an error, for example when
+            the incident does not belong to the status page.
+
+        Example::
+
+            >>> api.edit_incident(
+            ...     slug="slug1",
+            ...     id_=1,
+            ...     title="title 2",
+            ...     content="content 2",
+            ...     style=IncidentStyle.WARNING
+            ... )
+            {
+                'active': True,
+                'content': 'content 2',
+                'createdDate': '2022-12-15 16:51:43',
+                'id': 1,
+                'lastUpdatedDate': '2022-12-15 17:02:10',
+                'pin': True,
+                'status_page_id': 1,
+                'style': <IncidentStyle.WARNING: 'warning'>,
+                'title': 'title 2'
+            }
+        """
+        incident = {
+            "title": title,
+            "content": content,
+            "style": style,
+            "pin": pin
+        }
+        r = self._call('editIncident', (slug, id_, incident))["incident"]
+        parse_incident_style(r)
+        return r
+
+    def resolve_incident(self, slug: str, id_: int) -> dict:
+        """
+        Resolve an incident: the server unpins it and marks it inactive.
+
+        :param str slug: Slug
+        :param int id_: Id of the incident
+        :return: The resolved incident.
+        :rtype: dict
+        :raises UptimeKumaException: If the server returns an error.
+
+        Example::
+
+            >>> api.resolve_incident(slug="slug1", id_=1)
+            {
+                'active': False,
+                'content': 'content 1',
+                'createdDate': '2022-12-15 16:51:43',
+                'id': 1,
+                'lastUpdatedDate': '2022-12-15 17:02:10',
+                'pin': False,
+                'status_page_id': 1,
+                'style': <IncidentStyle.DANGER: 'danger'>,
+                'title': 'title 1'
+            }
+        """
+        r = self._call('resolveIncident', (slug, id_))["incident"]
+        parse_incident_style(r)
+        return r
+
+    def delete_incident(self, slug: str, id_: int) -> dict:
+        """
+        Delete an incident.
+
+        :param str slug: Slug
+        :param int id_: Id of the incident
+        :return: The server response.
+        :rtype: dict
+        :raises UptimeKumaException: If the server returns an error.
+
+        Example::
+
+            >>> api.delete_incident(slug="slug1", id_=1)
+            {
+                'msg': 'successDeleted',
+                'msgi18n': True
+            }
+        """
+        return self._call('deleteIncident', (slug, id_))
+
+    def get_incident_history(self, slug: str, cursor: str = None) -> dict:
+        """
+        Get one page of the incidents of a status page, newest first.
+
+        The server returns 10 incidents per page. Pass the ``nextCursor`` of a page
+        as ``cursor`` to get the next one. To read every incident, use
+        :meth:`iter_incident_history`.
+
+        :param str slug: Slug
+        :param str, optional cursor: ``nextCursor`` of the previous page, defaults to
+            None for the first page
+        :return: ``incidents`` (the page), ``total`` (all incidents of the status
+            page), ``nextCursor`` (the cursor for the next page, or None) and ``hasMore``.
+        :rtype: dict
+        :raises UptimeKumaException: If the server returns an error.
+        :raises Timeout: If the server does not answer.
+
+        Example::
+
+            >>> api.get_incident_history("slug1")
+            {
+                'incidents': [
+                    {
+                        'active': True,
+                        'content': 'content 1',
+                        'createdDate': '2022-12-15 16:51:43',
+                        'id': 1,
+                        'lastUpdatedDate': None,
+                        'pin': True,
+                        'status_page_id': 1,
+                        'style': <IncidentStyle.DANGER: 'danger'>,
+                        'title': 'title 1'
+                    }
+                ],
+                'total': 1,
+                'nextCursor': None,
+                'hasMore': False
+            }
+        """
+        # The cursor argument is always sent, even as None: the server never
+        # answers a getIncidentHistory call that has no cursor argument.
+        r = self._call('getIncidentHistory', (slug, cursor))
+        incidents = r["incidents"]
+        for incident in incidents:
+            parse_incident_style(incident)
+        return {
+            "incidents": incidents,
+            "total": r["total"],
+            "nextCursor": r["nextCursor"],
+            "hasMore": r["hasMore"]
+        }
+
+    def iter_incident_history(self, slug: str):
+        """
+        Iterate over every incident of a status page, newest first.
+
+        This is a generator. It fetches a page only when the iteration reaches it,
+        so stopping early costs one request, and
+        ``list(api.iter_incident_history(slug))`` returns every incident.
+
+        A full fetch is one request per 10 incidents, because the server fixes the
+        page size. The server pages by created date (``created_date < cursor``), so
+        incidents that share an exact created date across a page boundary can be
+        skipped.
+
+        :param str slug: Slug
+        :return: An iterator over the incidents, shaped like the entries of
+            :meth:`get_incident_history`.
+        :rtype: Iterator[dict]
+        :raises UptimeKumaException: If the server returns an error.
+        :raises Timeout: If the server does not answer.
+
+        Example::
+
+            >>> for incident in api.iter_incident_history("slug1"):
+            ...     print(incident["id"], incident["title"])
+            2 title 2
+            1 title 1
+        """
+        cursor = None
+        while True:
+            page = self.get_incident_history(slug, cursor)
+            yield from page["incidents"]
+            cursor = page["nextCursor"]
+            if not page["hasMore"] or cursor is None:
+                return
 
     # heartbeat
 
