@@ -3610,7 +3610,6 @@ class UptimeKumaApi(object):
                 'checkUpdate': False,
                 'chromeExecutable': '',
                 'disableAuth': False,
-                'dnsCache': True,
                 'entryPage': 'dashboard',
                 'keepDataPeriodDays': 180,
                 'nscd': False,
@@ -3647,7 +3646,6 @@ class UptimeKumaApi(object):
             primaryBaseURL: str = "",
             steamAPIKey: str = "",
             nscd: bool = False,
-            dnsCache: bool = False,
             chromeExecutable: str = "",
 
             # notifications
@@ -3657,7 +3655,10 @@ class UptimeKumaApi(object):
             disableAuth: bool = False,
 
             # reverse proxy
-            trustProxy: bool = False
+            trustProxy: bool = False,
+            # API and Prometheus
+            apiEnabled: bool = None,
+            prometheusApiEnabled: bool = None
     ) -> dict:
         r"""
         Set settings.
@@ -3672,11 +3673,12 @@ class UptimeKumaApi(object):
         :param str, optional primaryBaseURL: Primary Base URL, defaults to ""
         :param str, optional steamAPIKey: Steam API Key. For monitoring a Steam Game Server you need a Steam Web-API key., defaults to ""
         :param bool, optional nscd: Enable NSCD (Name Service Cache Daemon) for caching all DNS requests, defaults to False
-        :param bool, optional dnsCache: True to enable DNS Cache. It may be not working in some IPv6 environments, disable it if you encounter any issues., defaults to False
         :param str, optional chromeExecutable: Chrome/Chromium Executable, defaults to ""
         :param list, optional tlsExpiryNotifyDays: TLS Certificate Expiry. HTTPS Monitors trigger notification when TLS certificate expires in., defaults to None
         :param bool, optional disableAuth: Disable Authentication, defaults to False
         :param bool, optional trustProxy: Trust Proxy. Trust 'X-Forwarded-\*' headers. If you want to get the correct client IP and your Uptime Kuma is behind such as Nginx or Apache, you should enable this., defaults to False
+        :param bool, optional apiEnabled: "API and MCP". Turns on API key authentication of the socket (an ``Authorization: Bearer`` header) and the MCP endpoint. When None the key is not sent and the server keeps the stored value., defaults to None
+        :param bool, optional prometheusApiEnabled: Turns on the Prometheus ``/metrics`` endpoint. When None the library reads the current value with ``getSettings`` and sends it back, because the server compares the sent value with the stored one and stops metrics sampling when the key is missing. That costs one extra request., defaults to None
         :return: The server response.
         :rtype: dict
         :raises UptimeKumaException: If the server returns an error.
@@ -3692,14 +3694,15 @@ class UptimeKumaApi(object):
             ...     searchEngineIndex=False,
             ...     primaryBaseURL="",
             ...     steamAPIKey="",
-            ...     dnsCache=False,
             ...     tlsExpiryNotifyDays=[
             ...         7,
             ...         14,
             ...         21
             ...     ],
             ...     disableAuth=False,
-            ...     trustProxy=False
+            ...     trustProxy=False,
+            ...     apiEnabled=True,
+            ...     prometheusApiEnabled=True
             ... )
             {
                 'msg': 'Saved'
@@ -3718,7 +3721,6 @@ class UptimeKumaApi(object):
             "searchEngineIndex": searchEngineIndex,
             "primaryBaseURL": primaryBaseURL,
             "steamAPIKey": steamAPIKey,
-            "dnsCache": dnsCache,
             "tlsExpiryNotifyDays": tlsExpiryNotifyDays,
             "disableAuth": disableAuth,
             "trustProxy": trustProxy
@@ -3728,6 +3730,19 @@ class UptimeKumaApi(object):
             "chromeExecutable": chromeExecutable,
             "nscd": nscd,
         })
+
+        if apiEnabled is not None:
+            data["apiEnabled"] = apiEnabled
+        if prometheusApiEnabled is None:
+            # setSettings compares the sent prometheusApiEnabled with the
+            # stored one and stops the Prometheus sampling when they differ.
+            # A payload without the key compares as undefined, so send back
+            # the current value.
+            current = self.get_settings()
+            if "prometheusApiEnabled" in current:
+                data["prometheusApiEnabled"] = current["prometheusApiEnabled"]
+        else:
+            data["prometheusApiEnabled"] = prometheusApiEnabled
 
         return self._call('setSettings', (data, password))
 

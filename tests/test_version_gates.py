@@ -217,7 +217,8 @@ class TestFormerGatesAreUnconditional(unittest.TestCase):
         for version in ALL_STUBS:
             with self.subTest(version=version):
                 api = _VersionOnlyApi(version)
-                api.set_settings(chromeExecutable="/usr/bin/chromium", nscd=True)
+                api.set_settings(chromeExecutable="/usr/bin/chromium", nscd=True,
+                                 prometheusApiEnabled=False)
                 event, payload = api.calls[0]
                 self.assertEqual(event, "setSettings")
                 self.assertEqual(payload[0]["chromeExecutable"], "/usr/bin/chromium")
