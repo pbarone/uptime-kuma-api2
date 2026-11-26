@@ -471,19 +471,11 @@ def _check_arguments_monitor(kwargs) -> None:
         MonitorType.MANUAL: [],
         MonitorType.WEBSOCKET_UPGRADE: ["url"],
         MonitorType.SIP_OPTIONS: ["hostname"],
-        # Which target field Globalping needs depends on the subtype; checked
-        # below (server/monitor-types/globalping.js and EditMonitor.vue).
         MonitorType.GLOBALPING: ["subtype"],
     }
     type_ = kwargs["type"]
     required_args = required_args_by_type[type_]
     _check_missing_arguments(required_args, kwargs)
-    if type_ == MonitorType.GLOBALPING:
-        globalping_targets = {"ping": "hostname", "dns": "hostname", "http": "url"}
-        subtype = kwargs["subtype"]
-        if subtype not in globalping_targets:
-            raise ValueError(f"Unknown globalping subtype value: {subtype}")
-        _check_missing_arguments([globalping_targets[subtype]], kwargs)
 
     conditions = dict(
         interval=dict(

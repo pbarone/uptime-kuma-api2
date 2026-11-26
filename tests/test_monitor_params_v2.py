@@ -4406,5 +4406,34 @@ class TestSFTPMonitorType(unittest.TestCase):
         self.assertNotIn("sshUsername", result)
         self.assertNotIn("sftpPath", result)
 
+    def test_every_monitor_type_has_required_args_entry(self):
+        """Every MonitorType member must have a required_args_by_type entry.
+
+        Regression guard for the KeyError on MANUAL, WEBSOCKET_UPGRADE,
+        GLOBALPING and SIP_OPTIONS in add_monitor()/edit_monitor().
+        """
+        from uptime_kuma_api.api import _check_arguments_monitor
+        for member in MonitorType:
+            with self.subTest(member=member):
+                data = dict(
+                    type=member,
+                    name="t",
+                    interval=60,
+                    maxretries=0,
+                    retryInterval=60,
+                    accepted_statuscodes=["200-299"],
+                    dns_resolve_type="A",
+                )
+                try:
+                    _check_arguments_monitor(data)
+                except KeyError as e:
+                    if e.args and e.args[0] is member:
+                        self.fail("%s has no entry in required_args_by_type"
+                                  % member.name)
+                except TypeError:
+                    # Missing type-specific arguments means the table lookup
+                    # already succeeded.
+                    pass
+
 
 if __name__ == "__main__":    unittest.main()
