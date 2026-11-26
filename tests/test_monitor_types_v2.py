@@ -178,7 +178,8 @@ class TestNewMonitorTypes(unittest.TestCase):
         )
         assert result["type"] == MonitorType.SYSTEM_SERVICE
         assert result["name"] == "test svc"
-        assert result["system_service_name"] == "nginx"
+        assert result["config"] == {"systemServiceName": "nginx"}
+        assert "system_service_name" not in result
 
     def test_system_service_missing_service_name(self):
         """SYSTEM_SERVICE without system_service_name raises TypeError."""
@@ -206,7 +207,8 @@ class TestNewMonitorTypes(unittest.TestCase):
         )
         assert result["type"] == MonitorType.PM2
         assert result["name"] == "test pm2"
-        assert result["system_service_name"] == "my-app"
+        assert result["config"] == {"systemServiceName": "my-app"}
+        assert "system_service_name" not in result
 
     def test_pm2_missing_service_name(self):
         """PM2 without system_service_name raises TypeError."""
@@ -231,7 +233,8 @@ class TestNewMonitorTypes(unittest.TestCase):
             system_service_name="worker",
         )
         assert result["type"] == MonitorType.PM2
-        assert result["system_service_name"] == "worker"
+        assert result["config"] == {"systemServiceName": "worker"}
+        assert "system_service_name" not in result
 
     # ─── Port Defaults ───────────────────────────────────────────────────────
 

@@ -428,8 +428,9 @@ def _check_arguments_monitor(kwargs) -> None:
         MonitorType.RABBITMQ: ["rabbitmqNodes"],
         MonitorType.SNMP: ["hostname", "snmpOid"],
         MonitorType.SMTP: ["hostname"],
-        MonitorType.SYSTEM_SERVICE: ["system_service_name"],
-        MonitorType.PM2: ["system_service_name"],
+        # system_service_name lives in config.systemServiceName on 3.x; checked below.
+        MonitorType.SYSTEM_SERVICE: [],
+        MonitorType.PM2: [],
         MonitorType.NTP: ["hostname"],
         MonitorType.SFTP: ["hostname", "sshUsername"],
         MonitorType.ORACLEDB: ["databaseConnectionString"],
@@ -443,6 +444,9 @@ def _check_arguments_monitor(kwargs) -> None:
     type_ = kwargs["type"]
     required_args = required_args_by_type[type_]
     _check_missing_arguments(required_args, kwargs)
+    if type_ in (MonitorType.SYSTEM_SERVICE, MonitorType.PM2):
+        service_name = (kwargs.get("config") or {}).get("systemServiceName")
+        _check_missing_arguments(["system_service_name"], {"system_service_name": service_name})
     if type_ == MonitorType.GLOBALPING:
         globalping_targets = {"ping": "hostname", "dns": "hostname", "http": "url"}
         subtype = kwargs["subtype"]
@@ -1681,9 +1685,8 @@ class UptimeKumaApi(object):
 
         # SYSTEM_SERVICE / PM2
         if type in (MonitorType.SYSTEM_SERVICE, MonitorType.PM2):
-            data.update({
-                "system_service_name": system_service_name,
-            })
+            # Uptime Kuma 3.x keeps the name in the JSON config, not a column.
+            data["config"] = {"systemServiceName": system_service_name}
 
         # conditions keeps its own emission line rather than going through the
         # pass below: the caller's list must reach the payload as the same object,
@@ -1977,12 +1980,19 @@ class UptimeKumaApi(object):
                 'url': 'http://127.0.0.1',
                 'weight': 2000
             }
+
+        For ``SYSTEM_SERVICE`` and ``PM2`` monitors the record also carries
+        ``system_service_name``, copied from ``config['systemServiceName']``
+        (Uptime Kuma 3.x stores the name only inside ``config``).
         """
         r = self._call('getMonitor', id_)["monitor"]
         _convert_monitor_return(r)
         int_to_bool(r, ["active"])
         parse_monitor_type(r)
         parse_auth_method(r)
+        config = r.get("config")
+        if isinstance(config, dict) and "systemServiceName" in config:
+            r["system_service_name"] = config["systemServiceName"]
         return r
 
     def pause_monitor(self, id_: int) -> dict:
@@ -2233,6 +2243,11 @@ class UptimeKumaApi(object):
 
         data = self.get_monitor(id_)
         data.update({k: v for k, v in kwargs.items() if k not in withheld})
+        # get_monitor mirrors config.systemServiceName as system_service_name and
+        # the caller may override it; the server only accepts it inside config.
+        service_name = data.pop("system_service_name", None)
+        if service_name is not None and data.get("type") in (MonitorType.SYSTEM_SERVICE, MonitorType.PM2):
+            data["config"] = {**(data.get("config") or {}), "systemServiceName": service_name}
         _convert_monitor_input(data)
         _check_arguments_monitor(data)
         with self.wait_for_event(Event.MONITOR_LIST):

@@ -137,7 +137,7 @@ def monitor_docstring(mode) -> str:
         :param str, optional snmpVersion: SNMP version, "1", "2c", or "3". Defaults to None.
         :param str, optional snmp_v3_username: SNMPv3 username. Defaults to None.
         :param str, optional smtpSecurity: SMTP security mode, "secure", "starttls", or "nostarttls". Defaults to "starttls".
-        :param str, optional system_service_name: System service name. Required for SYSTEM_SERVICE monitors.
+        :param str, optional system_service_name: System service name. Required for SYSTEM_SERVICE and PM2 monitors. Sent to the server as ``config.systemServiceName``.
         :param str, optional sshUsername: SSH username. Required for SFTP monitors.
         :param str, optional sshAuthMethod: SFTP authentication method, "password" or "privateKey". The server treats anything other than "privateKey" as password. Defaults to None.
         :param str, optional sshPassword: SFTP password, used unless sshAuthMethod is "privateKey". Defaults to None.

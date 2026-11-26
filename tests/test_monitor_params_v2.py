@@ -1529,7 +1529,7 @@ class TestV2OnlyMonitorTypesPreservation(unittest.TestCase):
                 "snmpVersion": "2c",
             },
             MonitorType.SMTP: {"smtpSecurity": "starttls"},
-            MonitorType.SYSTEM_SERVICE: {"system_service_name": "cron"},
+            MonitorType.SYSTEM_SERVICE: {"config": {"systemServiceName": "cron"}},
             MonitorType.MANUAL: {},
             MonitorType.WEBSOCKET_UPGRADE: {"url": "ws://127.0.0.1:8080"},
             MonitorType.GLOBALPING: {"hostname": "example.com"},
