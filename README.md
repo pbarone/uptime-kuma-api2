@@ -181,7 +181,8 @@ Test files:
 | `tests/test_notification_v2.py` | Nextcloud Talk, Brevo, Evolution API providers |
 | `tests/test_logger.py` | Logger parameter type validation |
 | `tests/test_monitor_builder.py` | MonitorBuilder fluent API |
-| `tests/test_status_page_incidents.py` | The `incident` -> `incidents` rename in Uptime Kuma 2.1.0: the `KeyError` and the silent data loss from reading only the singular key |
+| `tests/test_status_page_incidents.py` | `get_status_page()` returns the `incidents` list and no singular `incident` key |
+| `tests/test_incident_management_v3.py` | `edit_incident()`, `resolve_incident()`, `delete_incident()`, `get_incident_history()`, the lazy `iter_incident_history()` and `post_incident()` without the extra save |
 | `tests/test_delete_id_coercion_v2.py` | String vs integer id in the existence guard of all seven `delete_*` methods (#91) |
 | `tests/test_monitor_cache_v2.py` | The `updateMonitorIntoList` / `deleteMonitorFromList` delta handlers and the refreshed `delete_monitor` / `delete_monitor_tag` guards |
 | `tests/test_notification_ntfy_v2.py` | ntfy notification payload building and argument checks |

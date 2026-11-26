@@ -61,7 +61,7 @@ class TestStatusPageV2(unittest.TestCase):
         type" when analyticsType is absent from the payload. Verified against
         3.x: null is accepted, an absent key is not. Omitting the key broke
         save_status_page for every page with no analytics configured, which in
-        turn broke post_incident and unpin_incident (both call save)."""
+        turn broke unpin_incident (which calls save)."""
         _, config, _, _ = self.build_v2(slug="test", id=1, title="Test Page")
         self.assertIn("analyticsType", config)
         self.assertIsNone(config["analyticsType"])
@@ -95,7 +95,6 @@ class TestGetStatusPageSslVerify(unittest.TestCase):
     # Minimal HTTP payload shaped like /api/status-page/<slug>.
     HTTP_PAYLOAD = {
         "config": {"slug": "slug1", "title": "status page 1"},
-        "incident": None,
         "publicGroupList": [],
         "maintenanceList": [],
     }
@@ -234,11 +233,10 @@ class TestGetStatusPageSslVerify(unittest.TestCase):
 
         self.assertEqual(
             set(page),
-            {"slug", "title", "incident", "incidents", "publicGroupList", "maintenanceList"},
+            {"slug", "title", "incidents", "publicGroupList", "maintenanceList"},
         )
         self.assertEqual(page["slug"], "slug1")
         self.assertEqual(page["title"], "status page 1")
-        self.assertIsNone(page["incident"])
         self.assertEqual(page["incidents"], [])
         self.assertEqual(page["publicGroupList"], [])
         self.assertEqual(page["maintenanceList"], [])
@@ -258,27 +256,21 @@ class TestGetStatusPageSslVerify(unittest.TestCase):
         self.assertEqual(args, (f"{api.url}/api/status-page/slug1",))
         self.assertEqual(kwargs["timeout"], api.timeout)
 
-    def test_default_preserves_incident_incidents_dual_key_shape(self):
-        """Both keys are present and consistent for every server payload shape.
+    def test_incidents_list_for_every_payload_shape(self):
+        """``incidents`` is always a list, with parsed styles, and no singular key.
 
-        **Validates: Requirements 3.4**
-
-        Scoped property: for each incident payload variant the 2.x and 1.x
-        servers can send, the returned dict exposes ``incidents`` as a list and
-        ``incident`` as its first entry (or ``None`` when empty).
+        Uptime Kuma 3.x sends only ``incidents``. The singular ``incident`` key
+        of the 2.x line is gone (BREAKING on v3).
         """
         from uptime_kuma_api import IncidentStyle
 
         second = dict(self.INCIDENT, id=2, title="title 2", style="info")
         variants = [
-            # (label, incident-related payload keys, expected incident ids)
-            ("v2 array", {"incidents": [dict(self.INCIDENT)]}, [1]),
-            ("v2 multiple", {"incidents": [dict(self.INCIDENT), dict(second)]}, [1, 2]),
-            ("v2 empty array", {"incidents": []}, []),
-            ("v2 null array", {"incidents": None}, []),
-            ("v1 singular", {"incident": dict(self.INCIDENT)}, [1]),
-            ("v1 null singular", {"incident": None}, []),
-            ("neither key", {}, []),
+            ("array", {"incidents": [dict(self.INCIDENT)]}, [1]),
+            ("multiple", {"incidents": [dict(self.INCIDENT), dict(second)]}, [1, 2]),
+            ("empty array", {"incidents": []}, []),
+            ("null array", {"incidents": None}, []),
+            ("no key", {}, []),
         ]
 
         for label, incident_keys, expected_ids in variants:
@@ -291,16 +283,11 @@ class TestGetStatusPageSslVerify(unittest.TestCase):
                 }
                 page, _ = self._fetch_status_page_result(ssl_verify=True, payload=payload)
 
-                self.assertIn("incident", page)
-                self.assertIn("incidents", page)
+                self.assertNotIn("incident", page)
                 self.assertIsInstance(page["incidents"], list)
                 self.assertEqual([i["id"] for i in page["incidents"]], expected_ids)
                 if expected_ids:
-                    self.assertEqual(page["incident"], page["incidents"][0])
-                    # style parsing still applies to every incident
                     self.assertEqual(page["incidents"][0]["style"], IncidentStyle.DANGER)
-                else:
-                    self.assertIsNone(page["incident"])
 
     def test_default_preserves_public_group_list_send_url_conversion(self):
         """publicGroupList monitors keep their int -> bool sendUrl conversion.
@@ -309,8 +296,7 @@ class TestGetStatusPageSslVerify(unittest.TestCase):
         """
         payload = {
             "config": {"slug": "slug1", "title": "status page 1"},
-            "incident": None,
-            "publicGroupList": [{
+                "publicGroupList": [{
                 "id": 1,
                 "name": "Services",
                 "weight": 1,
@@ -355,7 +341,6 @@ class TestStatusPageWithholdAndWarn(unittest.TestCase):
         "footerText": None,
         "showPoweredBy": True,
         "showCertificateExpiry": False,
-        "incident": None,
         "incidents": [],
         "maintenanceList": [],
         "autoRefreshInterval": 300,
@@ -553,7 +538,6 @@ class TestSaveStatusPageSignature(unittest.TestCase):
         "analyticsType": "plausible",
         "showOnlyLastHeartbeat": False,
         "rssTitle": None,
-        "incident": None,
         "incidents": [],
         "maintenanceList": [],
         "autoRefreshInterval": 300,
