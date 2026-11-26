@@ -3961,8 +3961,9 @@ class UptimeKumaApi(object):
             through an ``Authorization: Bearer <key>`` header, passed when the
             connection is created, as
             ``UptimeKumaApi(url, headers={"Authorization": "Bearer <key>"})``.
-            This works when the server's "API and MCP" setting (``apiEnabled``)
-            is on, and no :meth:`login` call is needed. Create a key with
+            This works when the server's "API and MCP" setting (``apiEnabled``,
+            see :meth:`set_settings`) is on, and no :meth:`login` call is
+            needed. Create a key with
             :meth:`~add_api_key`. Keys carried over from Uptime Kuma 2.x work
             only on the ``/metrics`` endpoint.
 
