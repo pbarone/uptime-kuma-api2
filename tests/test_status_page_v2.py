@@ -256,6 +256,28 @@ class TestGetStatusPageSslVerify(unittest.TestCase):
         self.assertEqual(args, (f"{api.url}/api/status-page/slug1",))
         self.assertEqual(kwargs["timeout"], api.timeout)
 
+    def test_fetch_bypasses_the_server_response_cache(self):
+        """The HTTP fetch asks the server not to answer from its cache.
+
+        Uptime Kuma 3.x caches ``/api/status-page/<slug>`` for five minutes
+        (``server/routers/status-page-router.js``) and only a status page save
+        clears it, so without this an incident posted, edited, resolved or
+        deleted a moment ago could be missing from ``incidents``. The cache
+        (``server/utils/response-cache.js``) applies http-cache-semantics, which
+        refuses a stored entry for a request with ``Cache-Control: no-cache``
+        and replaces it with the fresh response. A query parameter would also
+        bypass it, but would leave a new entry in the server's bounded cache on
+        every call.
+        """
+        api = self._build_api(ssl_verify=True)
+        with patch('uptime_kuma_api.api.requests.get') as mock_get:
+            mock_get.return_value.json.return_value = self.HTTP_PAYLOAD
+            api.get_status_page("slug1")
+
+        kwargs = mock_get.call_args.kwargs
+        self.assertEqual(kwargs.get("headers"), {"Cache-Control": "no-cache"})
+        self.assertNotIn("params", kwargs)
+
     def test_incidents_list_for_every_payload_shape(self):
         """``incidents`` is always a list, with parsed styles, and no singular key.
 

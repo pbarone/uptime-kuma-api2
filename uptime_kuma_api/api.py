@@ -2734,11 +2734,8 @@ class UptimeKumaApi(object):
         the full history.
 
         The incidents come from an HTTP endpoint that the server caches for five
-        minutes. Only :meth:`save_status_page` clears that cache. :meth:`post_incident`,
-        :meth:`edit_incident`, :meth:`resolve_incident` and :meth:`delete_incident`
-        do not, so ``incidents`` can be stale for up to five minutes after one of
-        them. :meth:`unpin_incident` saves the status page and so refreshes it.
-        :meth:`get_incident_history` is not cached; call it for current data.
+        minutes. This method asks the server to bypass that cache, so it returns
+        incidents posted, edited, resolved or deleted a moment ago.
 
         :param str slug: Slug
         :return: The status page.
@@ -2797,8 +2794,14 @@ class UptimeKumaApi(object):
         """
         r1 = self._call('getStatusPage', slug)
         try:
+            # The server caches this endpoint for five minutes and only a status
+            # page save clears it, so a fresh incident would be missing. no-cache
+            # makes its cache (http-cache-semantics) skip and replace the stored
+            # entry; a query parameter would also work but adds a cache entry per
+            # call.
             r2 = requests.get(
                 f"{self.url}/api/status-page/{slug}",
+                headers={"Cache-Control": "no-cache"},
                 timeout=self.timeout,
                 verify=self.ssl_verify
             ).json()
@@ -2987,9 +2990,6 @@ class UptimeKumaApi(object):
         """
         Post an incident to status page.
 
-        This does not save the status page, so :meth:`get_status_page` can keep
-        returning its cached ``incidents`` for up to five minutes. See
-        :meth:`get_status_page`.
 
         :param str slug: Slug
         :param str title: Title
