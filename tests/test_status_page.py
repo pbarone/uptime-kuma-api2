@@ -73,8 +73,6 @@ class TestStatusPage(UptimeKumaTestCase):
         incident = self.api.post_incident(slug, **incident_expected)
         self.assertTrue(type(incident["style"]) == IncidentStyle)
         self.compare(incident, incident_expected)
-        # the server caches the status page for five minutes and only a save clears it
-        self.api.save_status_page(**expected_status_page)
         status_page = self.api.get_status_page(slug)
         self.assertEqual([i["id"] for i in status_page["incidents"]], [incident["id"]])
         self.assertTrue(type(status_page["incidents"][0]["style"]) == IncidentStyle)
