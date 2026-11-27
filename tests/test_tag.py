@@ -30,13 +30,13 @@ class TestTag(UptimeKumaTestCase):
         expected_tag["name"] = "tag 1 new"
         expected_tag["color"] = "#000000"
         r = self.api.edit_tag(tag_id, **expected_tag)
-        self.assertEqual(r["msg"], "Saved")
+        self.assertEqual(r["msg"], "Saved.")
         tag = self.api.get_tag(tag_id)
         self.compare(tag, expected_tag)
 
         # delete tag
         r = self.api.delete_tag(tag_id)
-        self.assertEqual(r["msg"], "Deleted Successfully.")
+        self.assertEqual(r["msg"], "successDeleted")
         with self.assertRaises(UptimeKumaException):
             self.api.get_tag(tag_id)
 

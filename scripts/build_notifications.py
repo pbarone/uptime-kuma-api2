@@ -43,7 +43,6 @@ titles = {
     "HomeAssistant": "Home Assistant",
     "Kook": "Kook",
     "line": "LINE Messenger",
-    "LineNotify": "LINE Notify",
     "lunasea": "LunaSea",
     "matrix": "Matrix",
     "mattermost": "Mattermost",

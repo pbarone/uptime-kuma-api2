@@ -3,16 +3,15 @@ Export the full configuration of a live Uptime Kuma instance to a local JSON fil
 
 Read-only. Creates and modifies nothing on the server.
 
-Why this exists: Uptime Kuma has no download-backup endpoint (only
-``upload_backup`` for importing its own legacy format), so there is no API call
+Why this exists: Uptime Kuma has no download-backup endpoint, so there is no API call
 that produces a real database backup. This script instead walks every read
 endpoint and records the result, giving a point-in-time snapshot of what was
 configured before a live test run.
 
 SCOPE AND LIMITS — read this before relying on it:
   - This is a *reference snapshot*, not a one-click restore. The format is this
-    script's own, not Uptime Kuma's backup format, so ``upload_backup`` will
-    not consume it. Restoring means re-creating resources from the recorded
+    script's own, not Uptime Kuma's backup format, so no server import will
+    consume it. Restoring means re-creating resources from the recorded
     fields, by hand or by script.
   - Heartbeat/history data is NOT included, only configuration.
   - For a genuinely restorable backup, snapshot the server's SQLite file or
@@ -65,7 +64,7 @@ def main() -> int:
             "server_url": url,
             "server_version": version,
             "note": "Configuration snapshot only. No heartbeat history. "
-                    "Not restorable via upload_backup.",
+                    "Not restorable through any server import.",
         }
 
         # Each section is fetched independently so one unsupported endpoint

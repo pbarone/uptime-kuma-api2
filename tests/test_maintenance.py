@@ -23,7 +23,7 @@ class TestMaintenance(UptimeKumaTestCase):
 
         # add maintenance
         r = self.api.add_maintenance(**expected_maintenance)
-        self.assertEqual(r["msg"], "Added Successfully.")
+        self.assertEqual(r["msg"], "successAdded")
         maintenance_id = r["maintenanceID"]
 
         # get maintenance
@@ -48,11 +48,11 @@ class TestMaintenance(UptimeKumaTestCase):
 
         # pause maintenance
         r = self.api.pause_maintenance(maintenance_id)
-        self.assertEqual(r["msg"], "Paused Successfully.")
+        self.assertEqual(r["msg"], "successPaused")
 
         # resume maintenance
         r = self.api.resume_maintenance(maintenance_id)
-        self.assertEqual(r["msg"], "Resume Successfully")
+        self.assertEqual(r["msg"], "successResumed")
 
         # add monitor maintenance
         monitor_name = "monitor 1"
@@ -63,7 +63,7 @@ class TestMaintenance(UptimeKumaTestCase):
             },
         ]
         r = self.api.add_monitor_maintenance(maintenance_id, monitors)
-        self.assertEqual(r["msg"], "Added Successfully.")
+        self.assertEqual(r["msg"], "successAdded")
 
         # get monitor maintenance
         monitors = self.api.get_monitor_maintenance(maintenance_id)
@@ -79,7 +79,7 @@ class TestMaintenance(UptimeKumaTestCase):
             }
         ]
         r = self.api.add_status_page_maintenance(maintenance_id, status_pages)
-        self.assertEqual(r["msg"], "Added Successfully.")
+        self.assertEqual(r["msg"], "successAdded")
 
         # get status page maintenance
         status_pages = self.api.get_status_page_maintenance(maintenance_id)
@@ -88,7 +88,7 @@ class TestMaintenance(UptimeKumaTestCase):
 
         # delete maintenance
         r = self.api.delete_maintenance(maintenance_id)
-        self.assertEqual(r["msg"], "Deleted Successfully.")
+        self.assertEqual(r["msg"], "successDeleted")
         with self.assertRaises(UptimeKumaException):
             self.api.get_maintenance(maintenance_id)
 
@@ -234,7 +234,7 @@ class TestMaintenance(UptimeKumaTestCase):
     def do_test_maintenance_strategy(self, expected_maintenance):
         # add maintenance
         r = self.api.add_maintenance(**expected_maintenance)
-        self.assertEqual(r["msg"], "Added Successfully.")
+        self.assertEqual(r["msg"], "successAdded")
         maintenance_id = r["maintenanceID"]
 
         # get maintenance
@@ -256,7 +256,7 @@ class TestMaintenance(UptimeKumaTestCase):
 
         # delete maintenance
         r = self.api.delete_maintenance(maintenance_id)
-        self.assertEqual(r["msg"], "Deleted Successfully.")
+        self.assertEqual(r["msg"], "successDeleted")
         with self.assertRaises(UptimeKumaException):
             self.api.get_maintenance(maintenance_id)
 

@@ -56,8 +56,11 @@ integration test is excluded because it does.
 > ```
 >
 > `./run_tests.sh` is the maintained way to do it safely: it creates and
-> destroys its own container (a 3.x image). On `v3` the suite cannot pass until
-> the authentication change lands. It drives the tests through
+> destroys its own container (3.0.0-beta.3 by default, on `127.0.0.1:3002`).
+> The tests read their target from `UPTIME_KUMA_TEST_URL` (default
+> `http://127.0.0.1:3001`) and refuse any host other than `127.0.0.1` or
+> `localhost`. Better Auth allows 10 requests per 60 seconds, so a run pauses
+> for a minute after `test_2fa`. It drives the tests through
 > `unittest discover`, which ignores pytest markers, so it runs the full suite
 > regardless of the default above.
 

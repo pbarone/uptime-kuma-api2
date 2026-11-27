@@ -92,7 +92,7 @@ Now you can call one of the existing methods of the instance. For example create
 ```python
 >>> result = api.add_monitor(type=MonitorType.HTTP, name="Google", url="https://google.com")
 >>> print(result)
-{'msg': 'Added Successfully.', 'monitorID': 1}
+{'msg': 'successAdded', 'msgi18n': True, 'monitorID': 1}
 ```
 
 At the end, the connection to the API must be disconnected so that the program does not block.
@@ -160,7 +160,7 @@ pip install pytest
 pytest -v
 ```
 
-The remaining test files are integration tests inherited from upstream. They expect a live Uptime Kuma instance at `http://127.0.0.1:3001` and will **delete all monitors, notifications, proxies, tags, status pages, docker hosts, maintenances and API keys** on that instance, so never point them at a production server. They are excluded from a plain `pytest` run for that reason — opting in is explicit:
+The remaining test files are integration tests inherited from upstream. They expect a live Uptime Kuma instance at `UPTIME_KUMA_TEST_URL` (default `http://127.0.0.1:3001`; any host other than `127.0.0.1` or `localhost` is refused) and will **delete all monitors, notifications, proxies, tags, status pages, docker hosts, maintenances and API keys** on that instance, so never point them at a production server. They are excluded from a plain `pytest` run for that reason — opting in is explicit:
 
 ```
 pytest -m integration     # DESTRUCTIVE: disposable instances only

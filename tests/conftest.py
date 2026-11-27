@@ -4,8 +4,9 @@ Why derive it instead of listing files
 --------------------------------------
 The set of tests that need a live Uptime Kuma server is exactly the set that
 extends ``UptimeKumaTestCase`` -- that base class's ``setUp`` connects to
-127.0.0.1:3001 and deletes every monitor, notification, proxy, tag, status page,
-docker host, maintenance and API key on it. So "needs a server" is a property of
+``UPTIME_KUMA_TEST_URL`` (local hosts only, default 127.0.0.1:3001) and deletes
+every monitor, notification, proxy, tag, status page, docker host, maintenance
+and API key on it. So "needs a server" is a property of
 the code, not a fact that has to be restated in a list.
 
 Restating it in a list is what this project kept doing, and paying for: the
