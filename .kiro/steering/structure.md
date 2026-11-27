@@ -54,7 +54,8 @@ and was one of seven copies that had to be edited in lockstep.
 - **Inherited integration tests** — every `tests/test_*.py` that **does** extend
   `UptimeKumaTestCase` (`test_monitor.py`, `test_notification.py`,
   `test_status_page.py` and the rest). Require a live instance at
-  `127.0.0.1:3001` and **wipe all its data** on setup. Never run in CI, and
+  `UPTIME_KUMA_TEST_URL` (default `127.0.0.1:3001`; any host other than
+  `127.0.0.1` or `localhost` is refused) and **wipe all its data** on setup. Never run in CI, and
   deselected from a plain `pytest`. Never point them at anything you care about.
 - **Live scripts** (`live_test_backup.py`, `live_test_create.py`,
   `live_test_cleanup.py`, `live_test_ssl_verify.py`, `live_test_delete_id.py`):
