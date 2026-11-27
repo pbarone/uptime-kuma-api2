@@ -1,4 +1,5 @@
 import unittest
+from datetime import datetime, timedelta
 from uptime_kuma_api import UptimeKumaException
 from uptime_kuma_test_case import UptimeKumaTestCase
 
@@ -9,8 +10,10 @@ class TestApiKey(UptimeKumaTestCase):
         self.api.get_api_keys()
 
         # add api key (the server stores the expiry in its own format, so only
-        # the name is compared)
-        r = self.api.add_api_key(name="name 1", expires="2099-03-30 12:20:00")
+        # the name is compared). Better Auth rejects an expiry more than a year
+        # ahead, so it is relative to now.
+        expires = (datetime.now() + timedelta(days=30)).strftime("%Y-%m-%d %H:%M:%S")
+        r = self.api.add_api_key(name="name 1", expires=expires)
         self.assertIn("key", r)
         api_key_id = r["keyID"]
         self.assertIsInstance(api_key_id, str)

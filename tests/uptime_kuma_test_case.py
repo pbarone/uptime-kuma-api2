@@ -1,9 +1,23 @@
+import os
+import time
 import unittest
+from urllib.parse import urlparse
 import warnings
 
-from uptime_kuma_api import UptimeKumaApi, MonitorType, DockerType
+from uptime_kuma_api import UptimeKumaApi, UptimeKumaException, MonitorType, DockerType
 
 token = None
+
+
+def _target_url():
+    # Destructive setUp: refuse anything but a local disposable server.
+    url = os.environ.get("UPTIME_KUMA_TEST_URL", "http://127.0.0.1:3001")
+    host = urlparse(url).hostname
+    if host not in ("127.0.0.1", "localhost"):
+        raise RuntimeError(
+            "Refusing to run destructive integration tests against %r; "
+            "UPTIME_KUMA_TEST_URL must point at 127.0.0.1 or localhost." % url)
+    return url
 
 
 def compare(subset, superset):
@@ -30,7 +44,7 @@ def compare(subset, superset):
 
 class UptimeKumaTestCase(unittest.TestCase):
     api = None
-    url = "http://127.0.0.1:3001"
+    url = _target_url()
     username = "admin"
     password = "secret123"
 
@@ -40,13 +54,21 @@ class UptimeKumaTestCase(unittest.TestCase):
         self.api = UptimeKumaApi(self.url, timeout=1, wait_events=0.01)
 
         global token
-        if not token:
-            if self.api.need_setup():
-                self.api.setup(self.username, self.password)
-            r = self.api.login(self.username, self.password)
-            token = r["token"]
-
-        self.api.login_by_token(token)
+        if self.api.need_setup():
+            self.api.setup(self.username, self.password)
+        if token:
+            self.api.login_by_token(token)
+        else:
+            # Sign in once per process where possible. Better Auth allows 10
+            # requests per 60 s across /api/auth, and test_2fa alone spends
+            # most of that, so wait out the window once if it is used up.
+            try:
+                token = self.api.login(self.username, self.password)["token"]
+            except UptimeKumaException as e:
+                if "rate limited" not in str(e):
+                    raise
+                time.sleep(61)
+                token = self.api.login(self.username, self.password)["token"]
 
         # delete monitors
         monitors = self.api.get_monitors()
@@ -94,6 +116,16 @@ class UptimeKumaTestCase(unittest.TestCase):
         self.api.login_by_token(token)
 
     def tearDown(self):
+        # A test that calls logout() signs the shared session out, and may sign
+        # in again. Carry the session the test ended with into the next setUp
+        # (None forces a fresh sign-in). Checking the old token at the socket
+        # is not enough: 3.0.0-beta.3 still accepts a signed-out cookie there,
+        # but Better Auth calls such as getAPIKeyList then fail "Unauthorized".
+        # Read the cookie jar rather than the token login() returned: after
+        # test_2fa the jar holds a newer session cookie, and the one login()
+        # returned no longer authenticates the socket.
+        global token
+        token = self.api._auth_session.cookies.get("better-auth.session_token")
         self.api.disconnect()
 
     def compare(self, superset, subset):

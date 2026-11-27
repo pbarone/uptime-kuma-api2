@@ -21,7 +21,7 @@ class TestDockerHost(UptimeKumaTestCase):
 
         # add docker host
         r = self.api.add_docker_host(**expected_docker_host)
-        self.assertEqual(r["msg"], "Saved")
+        self.assertEqual(r["msg"], "Saved.")
         docker_host_id = r["id"]
 
         # get docker host
@@ -37,14 +37,14 @@ class TestDockerHost(UptimeKumaTestCase):
 
         # edit docker host
         r = self.api.edit_docker_host(docker_host_id, name="name 2")
-        self.assertEqual(r["msg"], "Saved")
+        self.assertEqual(r["msg"], "Saved.")
         docker_host = self.api.get_docker_host(docker_host_id)
         expected_docker_host["name"] = "name 2"
         self.compare(docker_host, expected_docker_host)
 
         # delete docker host
         r = self.api.delete_docker_host(docker_host_id)
-        self.assertEqual(r["msg"], "Deleted")
+        self.assertEqual(r["msg"], "successDeleted")
         with self.assertRaises(UptimeKumaException):
             self.api.get_docker_host(docker_host_id)
 

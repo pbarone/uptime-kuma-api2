@@ -8,7 +8,7 @@ class TestLogin(UptimeKumaTestCase):
     def test_auto_login(self):
         # disable auth
         r = self.api.set_settings(self.password, disableAuth=True)
-        self.assertEqual(r["msg"], "Saved")
+        self.assertEqual(r["msg"], "Saved.")
 
         # login again without username and password
         self.api.logout()
@@ -21,7 +21,7 @@ class TestLogin(UptimeKumaTestCase):
 
         # enable auth again
         r = self.api.set_settings(disableAuth=False)
-        self.assertEqual(r["msg"], "Saved")
+        self.assertEqual(r["msg"], "Saved.")
 
         r = self.api.get_settings()
         self.assertFalse(r["disableAuth"])
