@@ -1,5 +1,6 @@
 ## Changelog
-### Unreleased
+### Release 3.0.0b1
+The first beta of the 3.x line, for Uptime Kuma 3.x only (live-verified against 3.0.0-beta.2). It is a pre-release, so pip installs it only with `--pre`. Uptime Kuma 1.x and 2.x stay on the 2.x line (`uptime-kuma-api2<3`). This release has breaking changes from 2.x, listed below.
 
 The 3.x line drops the code paths for Uptime Kuma 1.x and 2.x servers. Uptime Kuma 1.x and 2.x stay supported by the 2.x line on `main` (`uptime-kuma-api2<3`). Tracked in [#88](https://github.com/pbarone/uptime-kuma-api2/issues/88).
 
