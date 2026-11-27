@@ -92,7 +92,7 @@ Now you can call one of the existing methods of the instance. For example create
 ```python
 >>> result = api.add_monitor(type=MonitorType.HTTP, name="Google", url="https://google.com")
 >>> print(result)
-{'msg': 'Added Successfully.', 'monitorID': 1}
+{'msg': 'successAdded', 'msgi18n': True, 'monitorID': 1}
 ```
 
 At the end, the connection to the API must be disconnected so that the program does not block.

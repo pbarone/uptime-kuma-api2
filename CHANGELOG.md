@@ -2,6 +2,8 @@
 ### Release 3.0.0b2
 #### BREAKING CHANGES
 - `upload_backup()` is removed. Uptime Kuma 3.x has no `uploadBackup` socket handler (checked at 3.0.0-beta.2 and 3.0.0-beta.3), so every call failed against a 3.x server. Refs [#88](https://github.com/pbarone/uptime-kuma-api2/issues/88).
+#### Documentation
+- The `msg` values in the docstring examples and the README now match what Uptime Kuma 3.0.0-beta.3 sends: i18n keys such as `successAdded`, `successDeleted`, `successPaused` and `successResumed`, the literal `Saved.`, `msgi18n: True` where the server sets it, and the `foundChromiumVersion` object for `test_chrome()`. Only the examples changed. Refs [#88](https://github.com/pbarone/uptime-kuma-api2/issues/88).
 ### Release 3.0.0b1
 The first beta of the 3.x line, for Uptime Kuma 3.x only (live-verified against 3.0.0-beta.2). It is a pre-release, so pip installs it only with `--pre`. Uptime Kuma 1.x and 2.x stay on the 2.x line (`uptime-kuma-api2<3`). This release has breaking changes from 2.x, listed below.
 

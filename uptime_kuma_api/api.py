@@ -592,7 +592,8 @@ class UptimeKumaApi(object):
         ...     url="https://google.com"
         ... )
         {
-            'msg': 'Added Successfully.',
+            'msg': 'successAdded',
+            'msgi18n': True,
             'monitorID': 1
         }
 
@@ -2012,7 +2013,8 @@ class UptimeKumaApi(object):
 
             >>> api.pause_monitor(1)
             {
-                'msg': 'Paused Successfully.'
+                'msg': 'successPaused',
+                'msgi18n': True
             }
         """
         return self._call('pauseMonitor', id_)
@@ -2030,7 +2032,8 @@ class UptimeKumaApi(object):
 
             >>> api.resume_monitor(1)
             {
-                'msg': 'Resumed Successfully.'
+                'msg': 'successResumed',
+                'msgi18n': True
             }
         """
         return self._call('resumeMonitor', id_)
@@ -2048,7 +2051,8 @@ class UptimeKumaApi(object):
 
             >>> api.delete_monitor(1)
             {
-                'msg': 'Deleted Successfully.'
+                'msg': 'successDeleted',
+                'msgi18n': True
             }
         """
         with self.wait_for_event(Event.MONITOR_LIST):
@@ -2156,7 +2160,11 @@ class UptimeKumaApi(object):
 
             >>> api.test_chrome("/usr/bin/chromium")
             {
-                'msg': 'Found Chromium/Chrome. Version: 90.0.4430.212'
+                'msg': {
+                    'key': 'foundChromiumVersion',
+                    'values': ['90.0.4430.212']
+                },
+                'msgi18n': True
             }
         """
         return self._call('testChrome', executable)
@@ -2184,7 +2192,8 @@ class UptimeKumaApi(object):
             ...     url="https://google.com"
             ... )
             {
-                'msg': 'Added Successfully.',
+                'msg': 'successAdded',
+                'msgi18n': True,
                 'monitorID': 1
             }
         """
@@ -2218,7 +2227,8 @@ class UptimeKumaApi(object):
             ... )
             {
                 'monitorID': 1,
-                'msg': 'Saved.'
+                'msg': 'Saved.',
+                'msgi18n': True
             }
         """
         # kwargs, not the merged data below: the guard fires on what the caller
@@ -2278,7 +2288,8 @@ class UptimeKumaApi(object):
             ...     value="test"
             ... )
             {
-                'msg': 'Added Successfully.'
+                'msg': 'successAdded',
+                'msgi18n': True
             }
         """
         r = self._call('addMonitorTag', (tag_id, monitor_id, value))
@@ -2311,7 +2322,8 @@ class UptimeKumaApi(object):
             ...     value="test"
             ... )
             {
-                'msg': 'Deleted Successfully.'
+                'msg': 'successDeleted',
+                'msgi18n': True
             }
         """
         with self.wait_for_event(Event.MONITOR_LIST):
@@ -2418,7 +2430,6 @@ class UptimeKumaApi(object):
             ...     pushAPIKey="INSERT_PUSH_API_KEY"
             ... )
             {
-                'ok': True,
                 'msg': 'Sent Successfully.'
             }
         """
@@ -2447,7 +2458,8 @@ class UptimeKumaApi(object):
             ... )
             {
                 'id': 1,
-                'msg': 'Saved'
+                'msg': 'Saved.',
+                'msgi18n': True
             }
         """
         data = _build_notification_data(**kwargs)
@@ -2477,7 +2489,8 @@ class UptimeKumaApi(object):
             ... )
             {
                 'id': 1,
-                'msg': 'Saved'
+                'msg': 'Saved.',
+                'msgi18n': True
             }
         """
         notification = self.get_notification(id_)
@@ -2509,7 +2522,8 @@ class UptimeKumaApi(object):
 
             >>> api.delete_notification(1)
             {
-                'msg': 'Deleted'
+                'msg': 'successDeleted',
+                'msgi18n': True
             }
         """
         with self.wait_for_event(Event.NOTIFICATION_LIST):
@@ -2626,7 +2640,8 @@ class UptimeKumaApi(object):
             ... )
             {
                 'id': 1,
-                'msg': 'Saved'
+                'msg': 'Saved.',
+                'msgi18n': True
             }
         """
         data = _build_proxy_data(**kwargs)
@@ -2654,7 +2669,8 @@ class UptimeKumaApi(object):
             ... )
             {
                 'id': 1,
-                'msg': 'Saved'
+                'msg': 'Saved.',
+                'msgi18n': True
             }
         """
         proxy = self.get_proxy(id_)
@@ -2676,7 +2692,8 @@ class UptimeKumaApi(object):
 
             >>> api.delete_proxy(1)
             {
-                'msg': 'Deleted'
+                'msg': 'successDeleted',
+                'msgi18n': True
             }
         """
         with self.wait_for_event(Event.PROXY_LIST):
@@ -2841,7 +2858,8 @@ class UptimeKumaApi(object):
 
             >>> api.add_status_page("slug1", "status page 1")
             {
-                'msg': 'OK!'
+                'msg': 'successAdded',
+                'msgi18n': True
             }
         """
         with self.wait_for_event(Event.STATUS_PAGE_LIST):
@@ -3743,7 +3761,8 @@ class UptimeKumaApi(object):
             ...     color="#000000"
             ... )
             {
-                'msg': 'Saved',
+                'msg': 'Saved.',
+                'msgi18n': True,
                 'tag': {
                     'id': 1,
                     'name': 'tag 1 new',
@@ -3769,7 +3788,8 @@ class UptimeKumaApi(object):
 
             >>> api.delete_tag(1)
             {
-                'msg': 'Deleted Successfully.'
+                'msg': 'successDeleted',
+                'msgi18n': True
             }
         """
         ids = [i["id"] for i in self.get_tags()]
@@ -3894,7 +3914,8 @@ class UptimeKumaApi(object):
             ...     prometheusApiEnabled=True
             ... )
             {
-                'msg': 'Saved'
+                'msg': 'Saved.',
+                'msgi18n': True
             }
         """
 
@@ -4401,7 +4422,8 @@ class UptimeKumaApi(object):
             ... )
             {
                 'id': 1,
-                'msg': 'Saved'
+                'msg': 'Saved.',
+                'msgi18n': True
             }
         """
         data = _build_docker_host_data(**kwargs)
@@ -4426,7 +4448,8 @@ class UptimeKumaApi(object):
             ... )
             {
                 'id': 1,
-                'msg': 'Saved'
+                'msg': 'Saved.',
+                'msgi18n': True
             }
         """
         data = self.get_docker_host(id_)
@@ -4448,7 +4471,8 @@ class UptimeKumaApi(object):
 
             >>> api.delete_docker_host(1)
             {
-                'msg': 'Deleted'
+                'msg': 'successDeleted',
+                'msgi18n': True
             }
         """
         with self.wait_for_event(Event.DOCKER_HOST_LIST):
@@ -4593,7 +4617,8 @@ class UptimeKumaApi(object):
             ...     daysOfMonth=[]
             ... )
             {
-                "msg": "Added Successfully.",
+                "msg": "successAdded",
+                "msgi18n": True,
                 "maintenanceID": 1
             }
 
@@ -4614,7 +4639,8 @@ class UptimeKumaApi(object):
             ...     timezoneOption="Europe/Berlin"
             ... )
             {
-                "msg": "Added Successfully.",
+                "msg": "successAdded",
+                "msgi18n": True,
                 "maintenanceID": 1
             }
 
@@ -4647,7 +4673,8 @@ class UptimeKumaApi(object):
             ...     timezoneOption="Europe/Berlin"
             ... )
             {
-                "msg": "Added Successfully.",
+                "msg": "successAdded",
+                "msgi18n": True,
                 "maintenanceID": 1
             }
 
@@ -4685,7 +4712,8 @@ class UptimeKumaApi(object):
             ...     timezoneOption="Europe/Berlin"
             ... )
             {
-                "msg": "Added Successfully.",
+                "msg": "successAdded",
+                "msgi18n": True,
                 "maintenanceID": 1
             }
 
@@ -4724,7 +4752,8 @@ class UptimeKumaApi(object):
             ...     timezoneOption="Europe/Berlin"
             ... )
             {
-                "msg": "Added Successfully.",
+                "msg": "successAdded",
+                "msgi18n": True,
                 "maintenanceID": 1
             }
 
@@ -4747,7 +4776,8 @@ class UptimeKumaApi(object):
             ...     timezoneOption="Europe/Berlin"
             ... )
             {
-                "msg": "Added Successfully.",
+                "msg": "successAdded",
+                "msgi18n": True,
                 "maintenanceID": 1
             }
         """
@@ -4794,6 +4824,7 @@ class UptimeKumaApi(object):
             ... )
             {
                 "msg": "Saved.",
+                "msgi18n": True,
                 "maintenanceID": 1
             }
         """
@@ -4815,7 +4846,8 @@ class UptimeKumaApi(object):
 
             >>> api.delete_maintenance(1)
             {
-                "msg": "Deleted Successfully."
+                "msg": "successDeleted",
+                "msgi18n": True
             }
         """
         with self.wait_for_event(Event.MAINTENANCE_LIST):
@@ -4841,7 +4873,8 @@ class UptimeKumaApi(object):
 
             >>> api.pause_maintenance(1)
             {
-                "msg": "Paused Successfully."
+                "msg": "successPaused",
+                "msgi18n": True
             }
         """
         return self._call('pauseMaintenance', id_)
@@ -4859,7 +4892,8 @@ class UptimeKumaApi(object):
 
             >>> api.resume_maintenance(1)
             {
-                "msg": "Resume Successfully"
+                "msg": "successResumed",
+                "msgi18n": True
             }
         """
         return self._call('resumeMaintenance', id_)
@@ -4913,7 +4947,8 @@ class UptimeKumaApi(object):
             ... ]
             >>> api.add_monitor_maintenance(1, monitors)
             {
-                "msg": "Added Successfully."
+                "msg": "successAdded",
+                "msgi18n": True
             }
         """
         return self._call('addMonitorMaintenance', (id_, monitors))
@@ -4965,7 +5000,8 @@ class UptimeKumaApi(object):
             ... ]
             >>> api.add_status_page_maintenance(1, status_pages)
             {
-                "msg": "Added Successfully."
+                "msg": "successAdded",
+                "msgi18n": True
             }
         """
         return self._call('addMaintenanceStatusPage', (id_, status_pages))
