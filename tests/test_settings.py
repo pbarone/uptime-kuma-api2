@@ -1,4 +1,3 @@
-import json
 import unittest
 
 from uptime_kuma_test_case import UptimeKumaTestCase
@@ -46,17 +45,6 @@ class TestSettings(UptimeKumaTestCase):
         # restore password
         r = self.api.change_password(new_password, self.password)
         self.assertEqual(r["msg"], "Password has been updated successfully.")
-
-    def test_upload_backup(self):
-        data = {
-            "version": "1.17.1",
-            "notificationList": [],
-            "monitorList": [],
-            "proxyList": []
-        }
-        data_str = json.dumps(data)
-        r = self.api.upload_backup(data_str, "overwrite")
-        self.assertEqual(r["msg"], "Backup successfully restored.")
 
 
 if __name__ == '__main__':

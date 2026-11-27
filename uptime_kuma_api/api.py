@@ -3964,35 +3964,6 @@ class UptimeKumaApi(object):
         }, use_session_cookie=True)
         return {"msg": "Password has been updated successfully."}
 
-    def upload_backup(self, json_data: str, import_handle: str = "skip") -> dict:
-        """
-        Import Backup.
-
-        :param str json_data: Backup data as json string.
-        :param str, optional import_handle: Choose "skip" if you want to skip every monitor or notification with the same name. "overwrite" will delete every existing monitor and notification. "keep" will keep both., defaults to "skip"
-        :return: The server response.
-        :rtype: dict
-        :raises UptimeKumaException: If the server returns an error.
-
-        Example::
-
-            >>> json_data = json.dumps({
-            ...     "version": "1.17.1",
-            ...     "notificationList": [],
-            ...     "monitorList": [],
-            ...     "proxyList": []
-            ... })
-            >>> api.upload_backup(
-            ...     json_data=json_data,
-            ...     import_handle="overwrite"
-            ... )
-            {
-                'msg': 'Backup successfully restored.'
-            }
-        """
-        if import_handle not in ["overwrite", "skip", "keep"]:
-            raise ValueError(f"Unknown import_handle value: {import_handle}")
-        return self._call('uploadBackup', (json_data, import_handle))
 
     # 2FA
 
