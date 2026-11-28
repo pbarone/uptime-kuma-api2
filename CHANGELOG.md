@@ -1,5 +1,6 @@
 ## Changelog
 ### Release 3.0.0b2
+The second beta of the 3.x line, for Uptime Kuma 3.x only. The integration suite passes against Uptime Kuma 3.0.0-beta.3 and 3.0.0-beta.2. It is a pre-release, so pip installs it only with `--pre`. Uptime Kuma 1.x and 2.x stay on the 2.x line (`uptime-kuma-api2<3`). This release removes `upload_backup()`, listed under BREAKING CHANGES.
 #### Features
 - New read-only property `UptimeKumaApi.session_token` returns the session token the library currently holds, or `None` when not logged in or after `logout()`. `verify_token()` (while 2FA is not yet enabled) and `disable_2fa()` make Uptime Kuma 3.0.0-beta.3 issue a new session and revoke the old one, so a token saved from `login()` stops working after them. Read `session_token` for the current one, to pass to `login_by_token()` later. It follows any rotation, so callers do not need to know which calls rotate. The return values of `verify_token()` and `disable_2fa()` are unchanged, and the `login()`, `verify_token()` and `disable_2fa()` docstrings now say that a saved token goes stale. Refs [#113](https://github.com/pbarone/uptime-kuma-api2/issues/113).
 #### Bugfixes
