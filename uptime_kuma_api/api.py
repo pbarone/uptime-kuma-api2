@@ -1079,6 +1079,32 @@ class UptimeKumaApi(object):
     # builder
 
     @property
+    def session_token(self) -> str:
+        """
+        The session token the library currently holds, or ``None`` when not
+        logged in or after :meth:`logout`. Read-only.
+
+        :meth:`verify_token` (while 2FA is not yet enabled) and :meth:`disable_2fa`
+        make the server issue a new session, and a token a caller saved earlier
+        stops working. This property always returns the current one, which
+        :meth:`login_by_token` accepts.
+
+        :return: The session token, or ``None``.
+        :rtype: str, optional
+
+        Example::
+
+            >>> api.login("admin", "secret123")
+            >>> api.disable_2fa("secret123")
+            {
+                'msg': '2FA Disabled.'
+            }
+            >>> api.session_token
+            'bYq6P1h6e0Lw1l3o8x3V9dWc0n2JtTqk.2f9Q...'
+        """
+        return self._session_cookie
+
+    @property
     def version(self) -> str:
         info = self.info()
         return info.get("version")
@@ -4067,6 +4093,10 @@ class UptimeKumaApi(object):
         Verify the provided 2FA token. On Uptime Kuma 3.x this step also turns
         2FA on for the account.
 
+        While 2FA is not yet enabled, this call makes the server issue a new
+        session, and a token saved earlier (for example from :meth:`login`) stops
+        working. Read :attr:`session_token` for the current one.
+
         :param str token: 2FA token.
         :param str password: Not sent. Kept for compatibility with earlier versions.
         :return: ``{"valid": True}``.
@@ -4115,6 +4145,10 @@ class UptimeKumaApi(object):
         """
         Disable 2FA for this user.
 
+        This call makes the server issue a new session, and a token saved earlier
+        (for example from :meth:`login`) stops working. Read :attr:`session_token`
+        for the current one.
+
         :param str password: Current password.
         :return: ``{"msg": "2FA Disabled."}``.
         :rtype: dict
@@ -4148,6 +4182,11 @@ class UptimeKumaApi(object):
         :rtype: dict
         :raises UptimeKumaException: If the server returns an error (for example wrong credentials), a 2FA token is required and none was given, the server did not return a session cookie, or the server rate limits the request (HTTP 429, Better Auth allows 10 requests per 60 seconds).
         :raises Timeout: If the server does not answer, or does not send ``session`` when logging in without credentials.
+
+        .. note::
+            The returned token stops working after :meth:`verify_token` (while 2FA is
+            not yet enabled) and :meth:`disable_2fa`, which make the server issue a new
+            session. Read :attr:`session_token` for the current one.
 
         .. note::
             Better Auth allows 10 requests per 60 seconds, so repeated logins can be rate limited.

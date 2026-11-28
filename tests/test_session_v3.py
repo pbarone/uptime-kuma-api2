@@ -264,5 +264,67 @@ class TestRotatedCookieIsAdopted(unittest.TestCase):
         sio.connect.assert_not_called()
 
 
+class TestSessionTokenProperty(unittest.TestCase):
+    """Issue #113: read-only public view of the session token the library holds."""
+
+    def test_none_before_login(self):
+        api, _ = _make_api()
+        self.assertIsNone(api.session_token)
+
+    def test_value_after_login_by_token(self):
+        api, _ = _make_api()
+        api.login_by_token(TOKEN)
+        self.assertEqual(api.session_token, TOKEN)
+
+    def test_value_after_login(self):
+        api, _ = _make_api()
+
+        def sign_in(self_, request, **kwargs):
+            from http.client import HTTPMessage
+            msg = HTTPMessage()
+            msg.add_header("Set-Cookie", f"better-auth.session_token={TOKEN}; Path=/; HttpOnly")
+            r = _response(200, {})
+            r.raw = SimpleNamespace(_original_response=SimpleNamespace(msg=msg))
+            r.request = request
+            return r
+
+        with patch.object(HTTPAdapter, "send", autospec=True, side_effect=sign_in):
+            result = api.login("admin", "pw")
+        self.assertEqual(result, {"token": TOKEN})
+        self.assertEqual(api.session_token, TOKEN)
+
+    def test_equals_new_cookie_after_verify_token(self):
+        api, _ = _make_api()
+        api.login_by_token(TOKEN)
+        rotating = TestRotatedCookieAfterLoginByToken._rotating_response("rotated.sig")
+        with _transport(rotating):
+            result = api.verify_token("123456", "pw")
+        self.assertEqual(result, {"valid": True})
+        self.assertEqual(api.session_token, "rotated.sig")
+
+    def test_equals_new_cookie_after_disable_2fa(self):
+        api, _ = _make_api()
+        api.login_by_token(TOKEN)
+        rotating = TestRotatedCookieAfterLoginByToken._rotating_response("rotated.sig")
+        with _transport(rotating):
+            result = api.disable_2fa("pw")
+        self.assertEqual(result, {"msg": "2FA Disabled."})
+        self.assertEqual(api.session_token, "rotated.sig")
+
+    def test_none_after_logout(self):
+        api, _ = _make_api()
+        api.login_by_token(TOKEN)
+        with _transport(_response(200, {"success": True})):
+            api.logout()
+        self.assertIsNone(api.session_token)
+
+    def test_cannot_be_assigned(self):
+        api, _ = _make_api()
+        api.login_by_token(TOKEN)
+        with self.assertRaises(AttributeError):
+            api.session_token = "other"
+        self.assertEqual(api.session_token, TOKEN)
+
+
 if __name__ == "__main__":
     unittest.main()
