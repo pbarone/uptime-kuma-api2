@@ -122,7 +122,7 @@ class UptimeKumaTestCase(unittest.TestCase):
         # is not enough: 3.0.0-beta.3 still accepts a signed-out cookie there,
         # but Better Auth calls such as getAPIKeyList then fail "Unauthorized".
         global token
-        token = self.api._session_cookie
+        token = self.api.session_token
         self.api.disconnect()
 
     def compare(self, superset, subset):
