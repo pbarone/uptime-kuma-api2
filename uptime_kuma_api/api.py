@@ -1008,7 +1008,22 @@ class UptimeKumaApi(object):
             if not isinstance(message, str) or not message:
                 message = f"{path} failed with status {r.status_code}"
             raise UptimeKumaException(message)
+        if use_session_cookie:
+            self._adopt_rotated_cookie()
         return body
+
+    def _adopt_rotated_cookie(self) -> None:
+        # Better Auth answers some calls on a logged-in session (verify-totp
+        # while 2FA is not yet enabled, two-factor/disable) with a new session
+        # and a new session cookie, and deletes the old session. The cookie jar
+        # takes the new value; _session_cookie and the socket would keep the
+        # deleted one, so the token from login() and the socket would stop
+        # authenticating. Follow the jar. A sign-out clears the jar, so there
+        # is nothing to adopt then.
+        cookie_value = self._auth_session.cookies.get("better-auth.session_token")
+        if cookie_value and cookie_value != self._session_cookie:
+            self._session_cookie = cookie_value
+            self._reconnect_with_cookie(cookie_value)
 
     def _reconnect_with_cookie(self, cookie_value: str) -> None:
         # The server reads the session cookie once, at the socket handshake, so
