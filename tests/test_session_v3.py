@@ -4,6 +4,7 @@ live server: the requests transport adapter and socketio.Client are patched, so
 the real cookie jar runs and the Cookie header on the wire can be asserted.
 """
 import json
+import typing
 import unittest
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
@@ -324,6 +325,11 @@ class TestSessionTokenProperty(unittest.TestCase):
         with self.assertRaises(AttributeError):
             api.session_token = "other"
         self.assertEqual(api.session_token, TOKEN)
+
+    def test_type_hint_allows_none(self):
+        # The property returns None when not logged in, so the hint must say so.
+        hint = typing.get_type_hints(UptimeKumaApi.session_token.fget)["return"]
+        self.assertEqual(hint, typing.Optional[str])
 
 
 if __name__ == "__main__":

@@ -1079,7 +1079,7 @@ class UptimeKumaApi(object):
     # builder
 
     @property
-    def session_token(self) -> str:
+    def session_token(self) -> Union[str, None]:
         """
         The session token the library currently holds, or ``None`` when not
         logged in or after :meth:`logout`. Read-only.
