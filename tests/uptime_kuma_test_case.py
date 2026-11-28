@@ -121,11 +121,8 @@ class UptimeKumaTestCase(unittest.TestCase):
         # (None forces a fresh sign-in). Checking the old token at the socket
         # is not enough: 3.0.0-beta.3 still accepts a signed-out cookie there,
         # but Better Auth calls such as getAPIKeyList then fail "Unauthorized".
-        # Read the cookie jar rather than the token login() returned: after
-        # test_2fa the jar holds a newer session cookie, and the one login()
-        # returned no longer authenticates the socket.
         global token
-        token = self.api._auth_session.cookies.get("better-auth.session_token")
+        token = self.api._session_cookie
         self.api.disconnect()
 
     def compare(self, superset, subset):

@@ -218,5 +218,51 @@ class TestRotatedCookieAfterLoginByToken(unittest.TestCase):
         self.assertEqual(second.headers["Cookie"], "better-auth.session_token=rotated.sig")
 
 
+class TestRotatedCookieIsAdopted(unittest.TestCase):
+    """Issue #111: verify_token (while 2FA is not yet enabled) and disable_2fa
+    make Better Auth issue a new session and delete the old one. The library
+    kept the old cookie value, so the socket and the token from login() went
+    stale."""
+
+    def _logged_in(self):
+        api, sio = _make_api()
+        api.login_by_token(TOKEN)
+        sio.connect.reset_mock()
+        return api, sio
+
+    def test_verify_token_adopts_rotated_cookie_and_reopens_socket(self):
+        api, sio = self._logged_in()
+        rotating = TestRotatedCookieAfterLoginByToken._rotating_response("rotated.sig")
+        with _transport(rotating):
+            api.verify_token("123456", "pw")
+        self.assertEqual(api._session_cookie, "rotated.sig")
+        sio.connect.assert_called_once()
+        self.assertEqual(sio.connect.call_args.kwargs["headers"]["Cookie"],
+                         "better-auth.session_token=rotated.sig")
+
+    def test_disable_2fa_adopts_rotated_cookie_and_reopens_socket(self):
+        api, sio = self._logged_in()
+        rotating = TestRotatedCookieAfterLoginByToken._rotating_response("rotated.sig")
+        with _transport(rotating):
+            api.disable_2fa("pw")
+        self.assertEqual(api._session_cookie, "rotated.sig")
+        self.assertEqual(sio.connect.call_args.kwargs["headers"]["Cookie"],
+                         "better-auth.session_token=rotated.sig")
+
+    def test_unchanged_cookie_does_not_reopen_socket(self):
+        api, sio = self._logged_in()
+        with _transport(_response(200, {"status": True})):
+            api.twofa_status()
+        self.assertEqual(api._session_cookie, TOKEN)
+        sio.connect.assert_not_called()
+
+    def test_logout_still_clears_session(self):
+        api, sio = self._logged_in()
+        with _transport(_response(200, {"success": True})):
+            api.logout()
+        self.assertIsNone(api._session_cookie)
+        sio.connect.assert_not_called()
+
+
 if __name__ == "__main__":
     unittest.main()
