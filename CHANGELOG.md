@@ -1,5 +1,8 @@
 ## Changelog
 ### Release 3.0.0b2
+#### Bugfixes
+
+- The session token went stale after `verify_token()` (while 2FA was not yet enabled) and `disable_2fa()`. Symptom: afterwards Better Auth socket calls such as `get_api_keys()` raised "Unauthorized", and the token `login()` returned failed in `login_by_token()` and after a reconnect. Cause: Better Auth answers those two requests with a new session and a new `better-auth.session_token`, and deletes the old session. The HTTP cookie jar took the new cookie, but the library and its open socket kept the deleted one. Fix: calls made with the session cookie now adopt the cookie the server rotated and reopen the socket with it. No signature changed. The report named the 2FA login flow, but `login()` itself was correct. Refs [#111](https://github.com/pbarone/uptime-kuma-api2/issues/111).
 #### BREAKING CHANGES
 - `upload_backup()` is removed. Uptime Kuma 3.x has no `uploadBackup` socket handler (checked at 3.0.0-beta.2 and 3.0.0-beta.3), so every call failed against a 3.x server. Refs [#88](https://github.com/pbarone/uptime-kuma-api2/issues/88).
 #### Documentation
